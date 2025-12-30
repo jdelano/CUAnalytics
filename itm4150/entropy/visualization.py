@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from metrics import calculate_entropy
+from .metrics import calculate_entropy
 
 def plot_entropy(df, feature, target_col='class'):
     """
