@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from .metrics import calculate_entropy
+from metrics import calculate_entropy
 
-def plot_feature_entropy(df, feature, target_col='class'):
+def plot_entropy(df, feature, target_col='class'):
     """
     Plot entropy as rectangles where:
     - Height = entropy
