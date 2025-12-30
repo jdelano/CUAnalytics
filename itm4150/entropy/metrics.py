@@ -12,22 +12,24 @@ def calculate_entropy(y):
     entropy = -np.sum(probabilities * np.log2(probabilities + 1e-10))
     return entropy
 
-def information_gain(parent, children_list):
+def information_gain(df, feature, target_col='class'):
     """
-    Calculate information gain from a split into multiple subsets
+    Calculate information gain in a dataframe splitting on a feature.
     
     Parameters:
     parent: array-like, the parent dataset (target values)
-    children_list: list of array-like children subsets
+    feature: attribute to split on
+    target_col: name of the target/class column
     
     Returns:
-    float: information gain
+    float: information gain based on splitting the data on the feature
     """
-    n = len(parent)
-    parent_entropy = calculate_entropy(parent)
+    n = len(df)
+    parent_entropy = calculate_entropy(df[target_col])
     
     # Calculate weighted average of children entropies
     weighted_child_entropy = 0
+    children_list = [df[df[feature] == val][target_col] for val in df[feature].unique()]
     for child in children_list:
         if len(child) > 0:  # Skip empty children
             weight = len(child) / n
