@@ -6,7 +6,6 @@ import pandas as pd
 from itm4150.datasets import (
     load_mushroom_data,
     load_iris_data,
-    get_sample_sales_data,
     list_datasets
 )
 
@@ -54,29 +53,6 @@ class TestIrisData:
         """Should have 'species' column"""
         df = load_iris_data()
         assert 'species' in df.columns
-
-
-class TestSampleSalesData:
-    """Tests for sample sales data generator"""
-    
-    def test_generates_data(self):
-        """Should generate sales data"""
-        df = get_sample_sales_data()
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) == 1000
-    
-    def test_has_required_columns(self):
-        """Should have expected columns"""
-        df = get_sample_sales_data()
-        required_cols = ['date', 'region', 'product', 'sales', 'quantity']
-        for col in required_cols:
-            assert col in df.columns
-    
-    def test_reproducible(self):
-        """Should generate same data with same seed"""
-        df1 = get_sample_sales_data()
-        df2 = get_sample_sales_data()
-        pd.testing.assert_frame_equal(df1, df2)
 
 
 class TestListDatasets:

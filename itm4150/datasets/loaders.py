@@ -50,11 +50,47 @@ def load_mushroom_data():
     
     return df
 
+def load_iris_data():
+    """
+    Load the classic Iris dataset.
+    
+    This dataset contains 150 samples of iris flowers with measurements
+    of sepal and petal dimensions, classified into 3 species.
+    
+    Returns:
+    --------
+    pd.DataFrame
+        Iris dataset with 150 samples and 5 columns
+        
+    Examples:
+    ---------
+    >>> from itm4150.datasets import load_iris_data
+    >>> df = load_iris_data()
+    >>> print(df['species'].value_counts())
+    """
+    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+    
+    column_names = [
+        'sepal_length', 'sepal_width', 'petal_length', 'petal_width', 'species'
+    ]
+    
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        df = pd.read_csv(StringIO(response.text), names=column_names)
+        # Remove any empty rows
+        df = df[df['species'].notna()]
+    except Exception as e:
+        print(f"Error loading iris data: {e}")
+        raise
+    
+    return df
+
 
 # Module-level convenience dictionary
 AVAILABLE_DATASETS = {
     'mushroom': load_mushroom_data,
-    # 'iris': load_iris_data,
+    'iris': load_iris_data,
     # 'titanic': load_titanic_data,
     # 'sales': get_sample_sales_data,
 }
