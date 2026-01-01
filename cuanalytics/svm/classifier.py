@@ -77,10 +77,7 @@ class SVMModel:
             )
         
         # Create and fit SVM
-        try:
-            self._fit()
-        except Exception as e:
-            raise RuntimeError(f"Failed to fit SVM model: {str(e)}")
+        self._fit()
         
         # Print summary
         self._print_fit_summary()

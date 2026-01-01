@@ -5,6 +5,8 @@ import pytest
 import numpy as np
 import pandas as pd
 from cuanalytics.entropy import calculate_entropy, information_gain, plot_entropy
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for testing
 
 
 class TestCalculateEntropy:

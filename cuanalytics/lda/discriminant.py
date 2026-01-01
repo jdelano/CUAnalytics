@@ -163,8 +163,6 @@ class LDAModel:
             Features ranked by importance
         """
         self._check_fitted()  
-        if not hasattr(self.lda, 'coef_'):
-            raise ValueError("LDA coefficients not available")
         
         # Average absolute coefficients across classes
         feature_importance = np.abs(self.lda.coef_).mean(axis=0)
@@ -279,7 +277,7 @@ class LDAModel:
         # Check that features are in the ORIGINAL feature set
         if feature1 not in self.feature_names or feature2 not in self.feature_names:
             raise ValueError(
-                f"Features must be from original features: {self.feature_names_original}\n"
+                f"Features must be from original features: {self.feature_names}\n"
                 f"You provided: {feature1}, {feature2}"
             )
         
@@ -583,41 +581,6 @@ class LDAModel:
         
         print("\n" + "="*70)
         
-        # Return summary dictionary
-        summary_dict = {
-            'train_fit': train_fit,
-            'train_predictions': y_pred_train,
-            'train_probabilities': y_proba_train,
-            'train_confusion_matrix': conf_matrix_train,
-            'train_classification_report': class_report_train,
-            'classes': self.classes,
-            'n_features': len(self.feature_names),
-            'n_components': len(self.classes) - 1
-        }
-        
-        if hasattr(self.lda, 'coef_'):
-            summary_dict['coefficients'] = pd.DataFrame(
-                self.lda.coef_,
-                index=[f'Class_{c}' for c in self.classes],
-                columns=self.feature_names
-            )
-            summary_dict['feature_importance'] = importance_df
-        
-        if hasattr(self.lda, 'scalings_'):
-            summary_dict['scalings'] = pd.DataFrame(
-                self.lda.scalings_,
-                index=self.feature_names,
-                columns=[f'LD{i+1}' for i in range(self.lda.scalings_.shape[1])]
-            )
-        
-        if hasattr(self.lda, 'means_'):
-            summary_dict['class_means'] = means_df
-        
-        if hasattr(self.lda, 'explained_variance_ratio_'):
-            summary_dict['explained_variance_ratio'] = self.lda.explained_variance_ratio_
-        
-        if hasattr(self.lda, 'priors_'):
-            summary_dict['priors'] = dict(zip(self.classes, self.lda.priors_))
         
 
 def fit_lda(df, target, n_components=None, solver='svd'):
