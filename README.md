@@ -32,7 +32,7 @@ df = load_sales_data()
 train, test = split_data(df, target='monthly_sales', test_size=0.2)
 
 # Fit a linear regression model
-model = fit_lm(train, target='monthly_sales')
+model = fit_lm(train, formula='monthly_sales ~ .')
 
 # View comprehensive statistical output
 model.summary()
@@ -42,7 +42,7 @@ model.visualize()
 model.visualize_all_features()
 
 # Evaluate on test set
-test_accuracy = model.score(test)
+test_accuracy = model.score(test)['accuracy']
 print(f"Test R²: {test_accuracy:.4f}")
 ```
 
@@ -60,7 +60,7 @@ df = load_mushroom_data()
 train, test = split_data(df, target='class', test_size=0.2)
 
 # Build decision tree
-tree = fit_tree(train, target='class', max_depth=3, criterion='entropy')
+tree = fit_tree(train, formula='class ~ .', max_depth=3, criterion='entropy')
 
 # Visualize tree structure
 tree.visualize()
@@ -75,8 +75,8 @@ importance = tree.get_feature_importance()
 print(tree.get_rules())
 
 # Evaluate
-train_acc = tree.score(train)
-test_acc = tree.score(test)
+train_acc = tree.score(train)['accuracy']
+test_acc = tree.score(test)['accuracy']
 ```
 
 ### 📊 Linear Discriminant Analysis (LDA)
@@ -91,7 +91,7 @@ df = load_iris_data()
 train, test = split_data(df, target='species', test_size=0.2)
 
 # Fit LDA model
-lda = fit_lda(train, target='species')
+lda = fit_lda(train, formula='species ~ .')
 
 # Comprehensive summary
 lda.summary()
@@ -107,7 +107,7 @@ scores = lda.transform(test)
 
 # Predictions
 predictions = lda.predict(test)
-test_accuracy = lda.score(test)
+test_accuracy = lda.score(test)['accuracy']
 ```
 
 ### 🎯 Support Vector Machines (SVM)
@@ -122,7 +122,7 @@ df = load_breast_cancer_data()
 train, test = split_data(df, target='diagnosis', test_size=0.2)
 
 # Fit SVM (C parameter controls margin strictness)
-svm = fit_svm(train, target='diagnosis', C=1.0)
+svm = fit_svm(train, formula='diagnosis ~ .', C=1.0)
 
 # View model details including support vectors
 svm.summary()
@@ -137,7 +137,7 @@ svm.visualize_features('radius_mean', 'texture_mean')
 support_vectors = svm.get_support_vectors()
 
 # Evaluate
-test_accuracy = svm.score(test)
+test_accuracy = svm.score(test)['accuracy']
 ```
 
 ### 📈 Linear Regression
@@ -152,11 +152,10 @@ df = load_real_estate_data()
 train, test = split_data(df, target='price_per_unit', test_size=0.2)
 
 # Method 1: Use all features
-model = fit_lm(train, target='price_per_unit')
+model = fit_lm(train, formula='price_per_unit ~ .')
 
 # Method 2: Select specific features
-model = fit_lm(train, target='price_per_unit', 
-               features=['house_age', 'distance_to_MRT'])
+model = fit_lm(train, formula='price_per_unit ~ house_age + distance_to_MRT')
 
 # Method 3: Use R-style formulas for interactions
 model = fit_lm(train, 
@@ -273,16 +272,17 @@ All models follow the same pattern:
 
 ```python
 # Fit model
-model = fit_*(train_data, target='target_column')
+model = fit_*(train_data, formula='target_column ~ .')
 
 # Or with options
-model = fit_*(train_data, target='target_column', param1=value1, param2=value2)
+model = fit_*(train_data, formula='target_column ~ .', param1=value1, param2=value2)
 
 # Make predictions
 predictions = model.predict(test_data)
 
 # Evaluate performance
-accuracy = model.score(test_data)  # or R² for regression
+score_report = model.score(test_data)
+accuracy = score_report['accuracy'] if isinstance(score_report, dict) else score_report
 
 # View detailed summary
 model.summary()

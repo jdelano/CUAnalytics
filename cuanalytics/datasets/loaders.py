@@ -118,7 +118,7 @@ def load_breast_cancer_data():
     (569, 31)
     >>> print(df['diagnosis'].value_counts())
     >>> train, test = split_data(df, target='diagnosis', test_size=0.2)
-    >>> lda = fit_lda(train, target='diagnosis')
+    >>> lda = fit_lda(train, formula='diagnosis ~ .')
     
     Dataset Information:
     --------------------
@@ -198,7 +198,7 @@ def load_real_estate_data():
     (414, 7)
     >>> print(df.head())
     >>> train, test = split_data(df, target='price_per_unit', test_size=0.2)
-    >>> model = fit_lm(train, target='price_per_unit')
+    >>> model = fit_lm(train, formula='price_per_unit ~ .')
     >>> model.summary()
     
     Dataset Information:

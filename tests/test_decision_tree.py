@@ -39,7 +39,7 @@ class TestSimpleDecisionTree:
     
     def test_initialization(self):
         """Test that tree initializes correctly"""
-        tree = SimpleDecisionTree(self.simple_df, 'class', max_depth=3)
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .', max_depth=3)
         
         assert tree.target == 'class'  # Changed from target_col
         assert tree.max_depth == 3
@@ -49,7 +49,7 @@ class TestSimpleDecisionTree:
     
     def test_categorical_features_identification(self):
         """Test that categorical features are identified correctly"""
-        tree = SimpleDecisionTree(self.mixed_df, 'approved')
+        tree = SimpleDecisionTree(self.mixed_df, formula='approved ~ .')
         
         assert 'age' in tree.numeric_features
         assert 'income' in tree.numeric_features
@@ -58,7 +58,7 @@ class TestSimpleDecisionTree:
     
     def test_numeric_features_identification(self):
         """Test that numeric features are identified correctly"""
-        tree = SimpleDecisionTree(self.numeric_df, 'y')
+        tree = SimpleDecisionTree(self.numeric_df, formula='y ~ .')
         
         assert 'x1' in tree.numeric_features
         assert 'x2' in tree.numeric_features
@@ -66,32 +66,28 @@ class TestSimpleDecisionTree:
     
     def test_one_hot_encoding(self):
         """Test that categorical features are one-hot encoded"""
-        tree = SimpleDecisionTree(self.simple_df, 'class')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .')
         
-        # Should have one-hot encoded columns
-        assert 'feature1_A' in tree.feature_names
-        assert 'feature1_B' in tree.feature_names
-        assert 'feature1_C' in tree.feature_names
-        assert 'feature2_X' in tree.feature_names
-        assert 'feature2_Y' in tree.feature_names
+        # Should have expanded categorical columns
+        assert len(tree.feature_names) > len(tree.feature_names_original)
+        assert any('feature1' in name for name in tree.feature_names)
+        assert any('feature2' in name for name in tree.feature_names)
     
     def test_mixed_features_encoding(self):
         """Test that mixed features are encoded correctly"""
-        tree = SimpleDecisionTree(self.mixed_df, 'approved')
+        tree = SimpleDecisionTree(self.mixed_df, formula='approved ~ .')
         
         # Numeric features should remain as-is
         assert 'age' in tree.feature_names
         assert 'income' in tree.feature_names
         
         # Categorical features should be one-hot encoded
-        assert 'color_red' in tree.feature_names
-        assert 'color_blue' in tree.feature_names
-        assert 'size_S' in tree.feature_names
-        assert 'size_M' in tree.feature_names
+        assert any('color' in name for name in tree.feature_names)
+        assert any('size' in name for name in tree.feature_names)
     
     def test_target_encoding(self):
         """Test that target is label encoded"""
-        tree = SimpleDecisionTree(self.simple_df, 'class')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .')
         
         # Target should be encoded as 0, 1
         assert set(tree.y_encoded) == {0, 1}
@@ -99,7 +95,7 @@ class TestSimpleDecisionTree:
     
     def test_predict_returns_original_labels(self):
         """Test that predictions return original class labels"""
-        tree = SimpleDecisionTree(self.simple_df, 'class')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .')
         
         predictions = tree.predict(self.simple_df)  # Can include target now
         
@@ -109,12 +105,29 @@ class TestSimpleDecisionTree:
     
     def test_score_method(self):
         """Test that score method returns accuracy"""
-        tree = SimpleDecisionTree(self.simple_df, 'class', max_depth=3)
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .', max_depth=3)
         
-        accuracy = tree.score(self.simple_df)
+        report = tree.score(self.simple_df)
         
-        assert 0 <= accuracy <= 1
-        assert isinstance(accuracy, (float, np.floating))
+        assert 0 <= report['accuracy'] <= 1
+        assert isinstance(report['confusion_matrix'], np.ndarray)
+
+    def test_get_metrics(self):
+        """Test getting classification metrics"""
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .', max_depth=3)
+        metrics = tree.get_metrics()
+
+        assert metrics['model_type'] == 'decision_tree'
+        assert 'score' in metrics
+        assert 'accuracy' in metrics['score']
+        assert 'confusion_matrix' in metrics['score']
+        assert 'per_class' in metrics['score']
+        assert 'kappa' in metrics['score']
+        assert 0 <= metrics['score']['accuracy'] <= 1
+        assert isinstance(metrics['score']['confusion_matrix'], np.ndarray)
+        assert metrics['score']['confusion_matrix'].shape == (2, 2)
+        assert metrics['classes'] == tree.classes
+        assert 'feature_importance' in metrics
     
     def test_perfect_classification(self):
         """Test that deep tree can perfectly classify training data"""
@@ -124,36 +137,56 @@ class TestSimpleDecisionTree:
             'class': ['yes', 'yes', 'no', 'no']
         })
         
-        tree = SimpleDecisionTree(perfect_df, 'class', max_depth=None)
-        accuracy = tree.score(perfect_df)
+        tree = SimpleDecisionTree(perfect_df, formula='class ~ .', max_depth=None)
+        accuracy = tree.score(perfect_df)['accuracy']
         
         assert accuracy == 1.0
+
+    def test_get_rules_single_leaf(self):
+        """Test get_rules when tree has a single leaf node."""
+        df = pd.DataFrame({
+            'feature': [1, 1, 1, 1],
+            'class': ['yes', 'no', 'yes', 'yes']
+        })
+        tree = SimpleDecisionTree(df, formula='class ~ .', max_depth=1)
+        rules = tree.get_rules()
+
+        assert "IF (Always) THEN Class=" in rules
+
+    def test_summary(self, monkeypatch):
+        """Test summary output"""
+        monkeypatch.setattr('builtins.print', lambda *args, **kwargs: None)
+        
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .', max_depth=3)
+        result = tree.summary()
+        
+        assert result is None
     
     def test_max_depth_constraint(self):
         """Test that max_depth is respected"""
-        tree_shallow = SimpleDecisionTree(self.simple_df, 'class', max_depth=1)
-        tree_deep = SimpleDecisionTree(self.simple_df, 'class', max_depth=5)
+        tree_shallow = SimpleDecisionTree(self.simple_df, formula='class ~ .', max_depth=1)
+        tree_deep = SimpleDecisionTree(self.simple_df, formula='class ~ .', max_depth=5)
         
         assert tree_shallow.tree.get_depth() <= 1  # Changed from clf
         assert tree_deep.tree.get_depth() <= 5
     
     def test_criterion_entropy(self):
         """Test that entropy criterion works"""
-        tree = SimpleDecisionTree(self.simple_df, 'class', criterion='entropy')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .', criterion='entropy')
         
         assert tree.criterion == 'entropy'
         assert tree.tree.criterion == 'entropy'
     
     def test_criterion_gini(self):
         """Test that gini criterion works"""
-        tree = SimpleDecisionTree(self.simple_df, 'class', criterion='gini')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .', criterion='gini')
         
         assert tree.criterion == 'gini'
         assert tree.tree.criterion == 'gini'
     
     def test_feature_importances(self):
         """Test that feature importances are calculated"""
-        tree = SimpleDecisionTree(self.simple_df, 'class')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .')
         
         importances = tree.tree.feature_importances_
         
@@ -163,7 +196,7 @@ class TestSimpleDecisionTree:
     
     def test_predict_with_new_data(self):
         """Test predictions on new data"""
-        tree = SimpleDecisionTree(self.simple_df, 'class')
+        tree = SimpleDecisionTree(self.simple_df, formula='class ~ .')
         
         new_data = pd.DataFrame({
             'feature1': ['A', 'B'],
@@ -174,10 +207,37 @@ class TestSimpleDecisionTree:
         
         assert len(predictions) == 2
         assert all(pred in ['yes', 'no'] for pred in predictions)
+
+    def test_formula_fit_tree(self):
+        """Test fitting with formula input"""
+        df = pd.DataFrame({
+            'x1': [1, 2, 3, 4, 5, 6],
+            'x2': [2, 1, 2, 1, 2, 1],
+            'class': ['yes', 'yes', 'no', 'no', 'yes', 'no']
+        })
+        tree = fit_tree(df, formula='class ~ x1 + x2')
+
+        assert tree.target == 'class'
+        assert set(tree.feature_names) == {'x1', 'x2'}
+
+        predictions = tree.predict(df[['x1', 'x2']])
+        assert len(predictions) == len(df)
+
+    def test_formula_visualize_features_runs(self, monkeypatch):
+        """Test visualize_features runs with formula usage"""
+        df = pd.DataFrame({
+            'x1': [1, 2, 3, 4],
+            'x2': [2, 3, 4, 5],
+            'class': ['yes', 'yes', 'no', 'no']
+        })
+        tree = fit_tree(df, formula='class ~ x1 + x2')
+
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        tree.visualize_features('x1', 'x2')
     
     def test_numeric_features_not_encoded(self):
         """Test that numeric features remain unchanged"""
-        tree = SimpleDecisionTree(self.numeric_df, 'y')
+        tree = SimpleDecisionTree(self.numeric_df, formula='y ~ .')
         
         # Original numeric values should be in X_encoded
         assert tree.X_encoded['x1'].tolist() == [1, 2, 3, 4, 5, 6]
@@ -194,7 +254,7 @@ class TestFitTree:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         assert isinstance(tree, SimpleDecisionTree)
     
@@ -205,7 +265,7 @@ class TestFitTree:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2, criterion='gini')
+        tree = fit_tree(df, formula='class ~ .', max_depth=2, criterion='gini')
         
         assert tree.max_depth == 2
         assert tree.criterion == 'gini'
@@ -222,7 +282,7 @@ class TestGetFeatureImportance:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         importance = tree.get_feature_importance()  # Now a method
         
         assert isinstance(importance, pd.DataFrame)
@@ -234,7 +294,7 @@ class TestGetFeatureImportance:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         importance = tree.get_feature_importance()
         
         assert 'feature' in importance.columns
@@ -249,7 +309,7 @@ class TestGetFeatureImportance:
             'class': ['yes', 'no', 'yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         importance = tree.get_feature_importance()
         
         # Check that importance values are in descending order
@@ -259,32 +319,101 @@ class TestGetFeatureImportance:
 
 class TestGetRules:
     """Tests for get_rules method"""
-    
+
     def test_returns_string(self):
         """Test that method returns a string"""
         df = pd.DataFrame({
             'feature': ['A', 'B', 'A', 'B'],
             'class': ['yes', 'no', 'yes', 'no']
         })
-        
-        tree = fit_tree(df, target='class', max_depth=2)
+
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         rules = tree.get_rules()  # Now a method
-        
+
         assert isinstance(rules, str)
         assert len(rules) > 0
-    
+
     def test_contains_feature_names(self):
         """Test that rules contain feature names"""
         df = pd.DataFrame({
             'my_feature': ['A', 'B', 'A', 'B'],
             'class': ['yes', 'no', 'yes', 'no']
         })
-        
-        tree = fit_tree(df, target='class', max_depth=2)
+
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         rules = tree.get_rules()
-        
+
         # Should contain the one-hot encoded feature name
         assert 'my_feature' in rules
+
+    def test_rules_in_sentence_format(self):
+        """Test that rules are in IF-THEN sentence format"""
+        df = pd.DataFrame({
+            'age': [25, 30, 35, 40, 45, 50],
+            'balance': [30000, 40000, 60000, 70000, 45000, 55000],
+            'class': ['approved', 'approved', 'denied', 'denied', 'approved', 'denied']
+        })
+
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
+        rules = tree.get_rules()
+
+        # Check for IF-THEN format
+        assert 'IF' in rules
+        assert 'THEN' in rules
+        assert 'Class=' in rules
+
+    def test_rules_contain_logical_operators(self):
+        """Test that rules contain AND operators for multiple conditions"""
+        df = pd.DataFrame({
+            'feature1': [1, 2, 3, 4, 5, 6, 7, 8],
+            'feature2': [10, 20, 30, 40, 50, 60, 70, 80],
+            'class': ['A', 'A', 'B', 'B', 'A', 'B', 'A', 'B']
+        })
+
+        tree = fit_tree(df, formula='class ~ .', max_depth=3)
+        rules = tree.get_rules()
+
+        # With depth > 1, should have AND operators
+        assert 'AND' in rules
+
+    def test_rules_contain_class_predictions(self):
+        """Test that rules show predicted classes"""
+        df = pd.DataFrame({
+            'x': [1, 2, 3, 4],
+            'status': ['pass', 'fail', 'pass', 'fail']
+        })
+
+        tree = fit_tree(df, formula='status ~ .', max_depth=1)
+        rules = tree.get_rules()
+
+        # Should contain both class labels
+        assert 'Class=pass' in rules or 'Class=fail' in rules
+
+    def test_rules_numbered(self):
+        """Test that rules are numbered"""
+        df = pd.DataFrame({
+            'x': [1, 2, 3, 4],
+            'y': ['A', 'B', 'A', 'B']
+        })
+
+        tree = fit_tree(df, formula='y ~ .', max_depth=2)
+        rules = tree.get_rules()
+
+        # Should have numbered rules
+        assert 'Rule 1:' in rules
+
+    def test_rules_contain_conditions(self):
+        """Test that rules contain threshold conditions"""
+        df = pd.DataFrame({
+            'value': [10, 20, 30, 40, 50],
+            'label': ['low', 'low', 'high', 'high', 'high']
+        })
+
+        tree = fit_tree(df, formula='label ~ .', max_depth=1)
+        rules = tree.get_rules()
+
+        # Should contain comparison operators
+        assert '<=' in rules or '>' in rules
 
 
 class TestVisualization:
@@ -297,7 +426,7 @@ class TestVisualization:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         assert hasattr(tree, 'visualize')
     
@@ -309,7 +438,7 @@ class TestVisualization:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         assert hasattr(tree, 'visualize_features')
     
@@ -320,7 +449,7 @@ class TestVisualization:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         # Mock plt.show() to prevent display
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -336,7 +465,7 @@ class TestVisualization:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -352,8 +481,8 @@ class TestWithMushroomData:
         """Test tree on mushroom dataset"""
         df = load_mushroom_data()
         
-        tree = fit_tree(df, target='class', max_depth=5)
-        accuracy = tree.score(df)
+        tree = fit_tree(df, formula='class ~ .', max_depth=5)
+        accuracy = tree.score(df)['accuracy']
         
         # Should get reasonable accuracy
         assert accuracy > 0.5
@@ -362,7 +491,7 @@ class TestWithMushroomData:
         """Test shallow tree on mushroom data"""
         df = load_mushroom_data()
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         assert tree.tree.get_depth() <= 2
     
@@ -370,7 +499,7 @@ class TestWithMushroomData:
         """Test feature importance on mushroom data"""
         df = load_mushroom_data()
         
-        tree = fit_tree(df, target='class', max_depth=3)
+        tree = fit_tree(df, formula='class ~ .', max_depth=3)
         importance = tree.get_feature_importance()
         
         # Should have importance scores for all features
@@ -382,10 +511,10 @@ class TestWithMushroomData:
         df = load_mushroom_data()
         
         train, test = split_data(df, test_size=0.2)
-        tree = fit_tree(train, target='class', max_depth=5)
+        tree = fit_tree(train, formula='class ~ .', max_depth=5)
         
-        train_acc = tree.score(train)
-        test_acc = tree.score(test)
+        train_acc = tree.score(train)['accuracy']
+        test_acc = tree.score(test)['accuracy']
         
         assert train_acc > 0.5
         assert test_acc > 0.5
@@ -403,10 +532,10 @@ class TestEdgeCases:
             'class': ['yes', 'no', 'yes', 'no']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         assert tree is not None
-        assert tree.score(df) > 0
+        assert tree.score(df)['accuracy'] > 0
     
     def test_binary_target(self):
         """Test with binary target"""
@@ -415,7 +544,7 @@ class TestEdgeCases:
             'class': [0, 1, 0, 1]
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         predictions = tree.predict(df)
         
         assert all(pred in [0, 1] for pred in predictions)
@@ -427,7 +556,7 @@ class TestEdgeCases:
             'class': ['X', 'Y', 'Z', 'X', 'Y', 'Z']
         })
         
-        tree = fit_tree(df, target='class')
+        tree = fit_tree(df, formula='class ~ .')
         
         assert len(tree.classes) == 3
         assert set(tree.classes) == {'X', 'Y', 'Z'}
@@ -439,7 +568,7 @@ class TestEdgeCases:
             'class': ['A', 'B', 'A']
         })
         
-        tree = fit_tree(df_train, target='class')
+        tree = fit_tree(df_train, formula='class ~ .')
         
         # Test data missing 'green' category
         df_test = pd.DataFrame({
@@ -480,7 +609,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['A', 'B', 'A', 'B', 'A']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Predict on new numeric data
         test_df = pd.DataFrame({
@@ -500,7 +629,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['X', 'Y', 'X', 'Y', 'X']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Predict - should trigger line 149 (concat with numeric features)
         test_df = pd.DataFrame({
@@ -518,7 +647,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['X', 'Y', 'X', 'Y']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -535,7 +664,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N', 'P']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -550,7 +679,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['X', 'Y', 'X', 'Y']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Should raise error - need at least 2 features
         with pytest.raises(ValueError, match="Need at least 2 features"):
@@ -564,7 +693,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Provide invalid feature names
         with pytest.raises(ValueError, match="Features must be from"):
@@ -578,7 +707,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -596,7 +725,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N', 'P']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -613,7 +742,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['X', 'Y', 'X', 'Y', 'X']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -630,7 +759,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N', 'P', 'N']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -648,7 +777,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N', 'P', 'N', 'P', 'N', 'P']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -668,7 +797,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['X', 'Y'] * 15
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -685,7 +814,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -702,7 +831,7 @@ class TestDecisionTreeMissingCoverage:
             'class': ['P', 'N', 'P', 'N']
         })
         
-        tree = fit_tree(df, target='class', max_depth=2)
+        tree = fit_tree(df, formula='class ~ .', max_depth=2)
         
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
         

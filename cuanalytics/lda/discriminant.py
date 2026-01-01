@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import confusion_matrix
 
 
 class LDAModel:
@@ -15,7 +15,7 @@ class LDAModel:
     Provides a simple interface for students.
     """
     
-    def __init__(self, df, target, n_components=None, solver='svd'):
+    def __init__(self, df, n_components=None, solver='svd', formula=None):
         """
         Create and fit a Linear Discriminant Analysis model.
         
@@ -23,29 +23,76 @@ class LDAModel:
         -----------
         df : pd.DataFrame
             DataFrame with features and target
-        target : str
-            Name of target column
         n_components : int, optional
             Number of discriminant components to keep
             If None, keeps min(n_features, n_classes - 1)
         solver : str
             Solver to use: 'svd' (default), 'lsqr', or 'eigen'
+        formula : str
+            Formula for specifying target and features
         """
         self.df = df
-        self.target = target
+        self.original_df = df
         self.n_components = n_components
         self.solver = solver
-        
-        # Separate features and target
-        self.X = df.drop(target, axis=1)
-        self.y = df[target]
+        self.formula = formula
+        self.model_spec = None
+
+        if formula is None:
+            raise ValueError("Must provide 'formula' for model specification")
+
+        try:
+            from formulaic import model_matrix
+        except ImportError:
+            raise ImportError(
+                "Formula support requires the 'formulaic' library.\n"
+                "Install it with: pip install formulaic"
+            )
+
+        if '~' not in formula:
+            raise ValueError("Formula must include a target (e.g., 'class ~ x1 + x2').")
+
+        lhs, rhs = formula.split('~', 1)
+        lhs = lhs.strip()
+        rhs = rhs.strip()
+
+        if lhs and lhs not in df.columns and lhs.isidentifier():
+            raise ValueError(f"Target '{lhs}' not found in data")
+
+        y = df[lhs]
+        df_rhs = df.drop(columns=[lhs])
+        model_matrices = model_matrix(rhs, df_rhs, output='pandas')
+
+        if hasattr(model_matrices, 'rhs'):
+            X = model_matrices.rhs
+        else:
+            X = model_matrices
+
+        self.model_spec = getattr(model_matrices, 'model_spec', None)
+        self.target = lhs
+
+        if 'Intercept' in X.columns:
+            X = X.drop('Intercept', axis=1)
+
+        self.df = X.copy()
+        self.df[self.target] = y
+        self.X = X
+        self.y = y
         
         # Store feature and class info
         self.feature_names = list(self.X.columns)
         self.classes = sorted(self.y.unique())
         
-        # Check if features are numeric
-        if not all(pd.api.types.is_numeric_dtype(self.X[col]) for col in self.X.columns):
+        # Check if source features are numeric
+        used_vars = set()
+        if self.model_spec is not None:
+            used_vars = {var for var in getattr(self.model_spec, 'variables', set())
+                         if var in df_rhs.columns}
+        if not used_vars:
+            used_vars = set(df_rhs.columns)
+        non_numeric = [col for col in used_vars
+                       if not pd.api.types.is_numeric_dtype(df_rhs[col])]
+        if non_numeric:
             raise ValueError("All features must be numeric. Encode categorical variables first.")
         
         # Create and fit LDA
@@ -70,15 +117,95 @@ class LDAModel:
         print(f"Classes: {self.classes}")
         print(f"Number of features: {len(self.feature_names)}")
         print(f"Number of components: {self.lda.n_components if hasattr(self.lda, 'n_components') else 'N/A'}")
-        print(f"Training accuracy: {self.score(self.df):.2%}")
+        y_pred = self.lda.predict(self.X)
+        train_metrics = self._compute_classification_metrics(self.y, y_pred)
+        print(f"Training accuracy: {train_metrics['accuracy']:.2%}")
     
     def _check_fitted(self):
         """Check if the model has been fitted"""
         if not hasattr(self, 'lda') or self.lda is None:
             raise RuntimeError(
                 "Model has not been fitted yet. "
-                "Create model with: lda = fit_lda(df, target='column_name')"
+                "Create model with: lda = fit_lda(df, formula='class ~ x1 + x2')"
             )
+
+    def _compute_classification_metrics(self, y_true, y_pred):
+        """Compute confusion-matrix based metrics."""
+        cm = confusion_matrix(y_true, y_pred, labels=self.classes)
+        total = cm.sum()
+        accuracy = np.trace(cm) / total if total else 0.0
+        row_marginals = cm.sum(axis=1)
+        col_marginals = cm.sum(axis=0)
+        expected = (row_marginals * col_marginals).sum() / (total ** 2) if total else 0.0
+        kappa = (accuracy - expected) / (1 - expected) if (1 - expected) else 0.0
+
+        per_class = {}
+        for idx, label in enumerate(self.classes):
+            tp = cm[idx, idx]
+            fn = cm[idx, :].sum() - tp
+            fp = cm[:, idx].sum() - tp
+            tn = total - tp - fn - fp
+
+            precision = tp / (tp + fp) if (tp + fp) else 0.0
+            recall = tp / (tp + fn) if (tp + fn) else 0.0
+            specificity = tn / (tn + fp) if (tn + fp) else 0.0
+            f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+
+            per_class[label] = {
+                'precision': precision,
+                'recall': recall,
+                'sensitivity': recall,
+                'specificity': specificity,
+                'f1': f1
+            }
+
+        return {
+            'accuracy': accuracy,
+            'kappa': kappa,
+            'confusion_matrix': cm,
+            'per_class': per_class,
+        }
+
+    def _print_score_report(self, report):
+        """Print a summary of classification performance."""
+        print("\nSCORE REPORT")
+        print("=" * 60)
+        print(f"Accuracy: {report['accuracy']:.2%}")
+        print(f"Kappa: {report['kappa']:.4f}")
+
+        conf_df = pd.DataFrame(
+            report['confusion_matrix'],
+            index=[f"Actual {c}" for c in self.classes],
+            columns=[f"Pred {c}" for c in self.classes]
+        )
+        print("\nConfusion Matrix:")
+        print(conf_df.to_string())
+
+        per_class_df = pd.DataFrame(report['per_class']).T
+        print("\nPer-Class Metrics:")
+        print(per_class_df.to_string(float_format=lambda x: f"{x:.4f}"))
+
+
+    def _transform_data_with_formula(self, df):
+        """
+        Transform data using the stored formula specification.
+        """
+        if getattr(self, 'model_spec', None) is None:
+            raise RuntimeError("Formula metadata missing; cannot transform new data.")
+
+        rhs_spec = getattr(self.model_spec, 'rhs', self.model_spec)
+        df_rhs = df.drop(columns=[self.target], errors='ignore')
+        model_matrices = rhs_spec.get_model_matrix(df_rhs, output='pandas')
+
+        if hasattr(model_matrices, 'rhs'):
+            X_new = model_matrices.rhs
+        else:
+            X_new = model_matrices
+
+        if 'Intercept' in X_new.columns:
+            X_new = X_new.drop('Intercept', axis=1)
+
+        return X_new
 
     
     def predict(self, df):
@@ -95,9 +222,10 @@ class LDAModel:
         predictions : array
             Predicted class labels
         """
-        self._check_fitted()  
-        X = df[self.feature_names] if self.target in df.columns else df
-        return self.lda.predict(X)
+        self._check_fitted()
+        X = self._transform_data_with_formula(df)
+        predictions = self.lda.predict(X)
+        return pd.Series(predictions, index=df.index, name=self.target)
     
     def predict_proba(self, df):
         """
@@ -113,13 +241,13 @@ class LDAModel:
         probabilities : array
             Predicted probabilities for each class
         """
-        self._check_fitted()  
-        X = df[self.feature_names] if self.target in df.columns else df
+        self._check_fitted()
+        X = self._transform_data_with_formula(df)
         return self.lda.predict_proba(X)
     
     def score(self, df):
         """
-        Calculate accuracy on a dataset.
+        Calculate and print classification metrics on a dataset.
         
         Parameters:
         -----------
@@ -128,13 +256,17 @@ class LDAModel:
         
         Returns:
         --------
-        accuracy : float
-            Accuracy score (0 to 1)
+        metrics : dict
+            Dictionary of accuracy, confusion matrix, and derived metrics
         """
         self._check_fitted()
-        X = df[self.feature_names]
+        X = self._transform_data_with_formula(df)
         y_true = df[self.target]
-        return self.lda.score(X, y_true)
+
+        y_pred = self.lda.predict(X)
+        report = self._compute_classification_metrics(y_true, y_pred)
+        self._print_score_report(report)
+        return report
     
     def transform(self, df):
         """
@@ -150,7 +282,7 @@ class LDAModel:
         transformed : array
             Data in LDA space
         """
-        X = df[self.feature_names] if self.target in df.columns else df
+        X = self._transform_data_with_formula(df)
         return self.lda.transform(X)
     
     def get_feature_importance(self):
@@ -174,6 +306,34 @@ class LDAModel:
         
         return importance_df
 
+    def get_metrics(self):
+        """
+        Calculate classification metrics on training data.
+
+        Returns:
+        --------
+        metrics : dict
+            Dictionary with model metrics and statistics
+        """
+        self._check_fitted()
+
+        metrics = {
+            'model_type': 'lda',
+            'target': self.target,
+            'n_samples': len(self.y),
+            'n_features': len(self.feature_names),
+            'feature_names': self.feature_names,
+            'classes': self.classes
+        }
+
+        y_pred = self.lda.predict(self.X)
+        y_true = self.y
+
+        metrics['score'] = self._compute_classification_metrics(y_true, y_pred)
+        metrics['feature_importance'] = self.get_feature_importance()
+
+        return metrics
+
     def visualize(self, figsize=(12, 5)):
         """
         Visualize LDA projection in discriminant space.
@@ -188,7 +348,7 @@ class LDAModel:
         
         Examples:
         ---------
-        >>> lda = fit_lda(df, target='species')
+        >>> lda = fit_lda(df, formula='species ~ .')
         >>> lda.visualize()  # Shows projection onto LD1/LD2
         """
         self._check_fitted()
@@ -269,10 +429,12 @@ class LDAModel:
         
         Examples:
         ---------
-        >>> lda = fit_lda(df, target='species')
+        >>> lda = fit_lda(df, formula='species ~ .')
         >>> lda.visualize('petal_length', 'petal_width')
         """
         self._check_fitted()
+
+        data_df = self.original_df if getattr(self, 'original_df', None) is not None else self.df
         
         # Check that features are in the ORIGINAL feature set
         if feature1 not in self.feature_names or feature2 not in self.feature_names:
@@ -282,8 +444,8 @@ class LDAModel:
             )
         
         # Get the actual data for these two features from original dataframe
-        X_2d = self.df[[feature1, feature2]].values
-        y = self.y.values
+        X_2d = data_df[[feature1, feature2]].values
+        y = data_df[self.target].values
         
         # Retrain LDA on just these two features
         lda_2d = LinearDiscriminantAnalysis()
@@ -368,21 +530,18 @@ class LDAModel:
         
         Examples:
         ---------
-        >>> lda = fit_lda(train, target='species')
+        >>> lda = fit_lda(train, formula='species ~ .')
         >>> lda.summary()  # Show model details
-        >>> train_fit = lda.score(train)  # Training fit
-        >>> test_acc = lda.score(test)    # Test accuracy
+        >>> train_fit = lda.score(train)['accuracy']  # Training fit
+        >>> test_acc = lda.score(test)['accuracy']    # Test accuracy
         """
         self._check_fitted()
         
-        # Predictions on training data
-        y_pred_train = self.predict(self.df)
-        y_proba_train = self.predict_proba(self.df)
-        
         # Training metrics
-        train_fit = self.score(self.df)
-        conf_matrix_train = confusion_matrix(self.y, y_pred_train)
-        class_report_train = classification_report(self.y, y_pred_train)
+        y_pred_train = self.lda.predict(self.X)
+        train_metrics = self._compute_classification_metrics(self.y, y_pred_train)
+        train_fit = train_metrics['accuracy']
+        conf_matrix_train = train_metrics['confusion_matrix']
         
         # Print summary
         print("\n" + "="*70)
@@ -567,10 +726,11 @@ class LDAModel:
         print("\nTraining Confusion Matrix:")
         conf_df_train = pd.DataFrame(
             conf_matrix_train,
-            index=[f"True {c}" for c in self.classes],
+            index=[f"Actual {c}" for c in self.classes],
             columns=[f"Pred {c}" for c in self.classes]
         )
         print(conf_df_train.to_string())
+        print(f"\nKappa: {train_metrics['kappa']:.4f}")
         
         # Prior probabilities
         if hasattr(self.lda, 'priors_'):
@@ -583,7 +743,7 @@ class LDAModel:
         
         
 
-def fit_lda(df, target, n_components=None, solver='svd'):
+def fit_lda(df, n_components=None, solver='svd', formula=None):
     """
     Fit a Linear Discriminant Analysis model.
     
@@ -593,12 +753,12 @@ def fit_lda(df, target, n_components=None, solver='svd'):
     -----------
     df : pd.DataFrame
         DataFrame with features and target
-    target : str
-        Name of target column
     n_components : int, optional
         Number of discriminant components to keep
     solver : str
         Solver to use: 'svd' (default), 'lsqr', or 'eigen'
+    formula : str
+        Formula for specifying target and features
     
     Returns:
     --------
@@ -610,8 +770,10 @@ def fit_lda(df, target, n_components=None, solver='svd'):
     >>> from cuanalytics.datasets import load_iris_data
     >>> from cuanalytics.lda import fit_lda
     >>> df = load_iris_data()
-    >>> lda = fit_lda(df, target='species')
+    >>> lda = fit_lda(df, formula='species ~ .')
     >>> lda.visualize()
-    >>> print(f"Accuracy: {lda.score(df):.2%}")
+    >>> print(f"Accuracy: {lda.score(df)['accuracy']:.2%}")
     """
-    return LDAModel(df, target, n_components, solver)
+    if formula is None:
+        raise ValueError("Must provide 'formula' for model specification")
+    return LDAModel(df, n_components, solver, formula=formula)

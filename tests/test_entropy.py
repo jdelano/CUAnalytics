@@ -9,6 +9,14 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for testing
 
 
+@pytest.fixture(autouse=True)
+def close_plots():
+    """Automatically close all plots after each test."""
+    import matplotlib.pyplot as plt
+    yield
+    plt.close('all')
+
+
 class TestCalculateEntropy:
     """Tests for calculate_entropy function"""
     

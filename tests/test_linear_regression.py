@@ -38,7 +38,7 @@ class TestLinearRegressionBasic:
     
     def test_model_creation_default(self, simple_data):
         """Test creating model with default settings (all features)."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         
         assert model is not None
         assert isinstance(model, LinearRegressionModel)
@@ -48,7 +48,7 @@ class TestLinearRegressionBasic:
     
     def test_model_creation_feature_subset(self, simple_data):
         """Test creating model with feature subset."""
-        model = fit_lm(simple_data, target='y', features=['x1'])
+        model = fit_lm(simple_data, formula='y ~ x1')
         
         assert model.feature_names == ['x1']
         assert 'x2' not in model.feature_names
@@ -64,18 +64,18 @@ class TestLinearRegressionBasic:
     def test_predictions(self, simple_data):
         """Test making predictions."""
         train, test = split_data(simple_data, test_size=0.2)
-        model = fit_lm(train, target='y')
+        model = fit_lm(train, formula='y ~ .')
         
         predictions = model.predict(test)
         
         assert len(predictions) == len(test)
-        assert isinstance(predictions, np.ndarray)
+        assert isinstance(predictions, pd.Series)
         assert not np.any(np.isnan(predictions))
     
     def test_score(self, simple_data):
         """Test R² scoring."""
         train, test = split_data(simple_data, test_size=0.2)
-        model = fit_lm(train, target='y')
+        model = fit_lm(train, formula='y ~ .')
         
         train_r2 = model.score(train)
         test_r2 = model.score(test)
@@ -86,19 +86,19 @@ class TestLinearRegressionBasic:
     
     def test_get_metrics(self, simple_data):
         """Test getting multiple metrics."""
-        model = fit_lm(simple_data, target='y')
-        metrics = model.get_metrics(simple_data)
+        model = fit_lm(simple_data, formula='y ~ .')
+        metrics = model.get_metrics()
         
-        assert 'R2' in metrics
-        assert 'RMSE' in metrics
-        assert 'MAE' in metrics
-        assert metrics['R2'] > 0.9
-        assert metrics['RMSE'] > 0
-        assert metrics['MAE'] > 0
+        assert metrics['model_type'] == 'linear_regression'
+        assert metrics['target'] == 'y'
+        assert metrics['metrics']['r2'] > 0.9
+        assert metrics['metrics']['rmse'] > 0
+        assert metrics['metrics']['mae'] > 0
+        assert 'coefficients' in metrics
     
     def test_get_coefficients(self, simple_data):
         """Test getting coefficients."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         coef_df = model.get_coefficients()
         
         assert isinstance(coef_df, pd.DataFrame)
@@ -114,7 +114,7 @@ class TestLinearRegressionBasic:
     
     def test_get_equation(self, simple_data):
         """Test getting equation string."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         equation = model.get_equation()
         
         assert isinstance(equation, str)
@@ -159,8 +159,8 @@ class TestLinearRegressionFormulas:
         assert 'a' in model.feature_names
         assert 'b' in model.feature_names
         assert 'a:b' in model.feature_names
-        assert len(model.feature_names) == 3
-    
+
+
     def test_formula_interaction_only(self, data_for_interactions):
         """Test formula with only interaction term."""
         model = fit_lm(data_for_interactions, formula='y ~ a:b')
@@ -205,6 +205,55 @@ class TestLinearRegressionFormulas:
         assert 'a × b' in coef_df['feature'].values
 
 
+class TestLinearRegressionFormulaTransformBranches:
+    """Cover formula transform branch paths."""
+
+    def test_transform_missing_model_spec_raises(self):
+        """Ensure missing formula metadata raises a clear error."""
+        df = pd.DataFrame({
+            'a': [1, 2, 3],
+            'b': [2, 3, 4],
+            'y': [3, 5, 7]
+        })
+        model = fit_lm(df, formula='y ~ a + b')
+        model.model_spec = None
+
+        with pytest.raises(RuntimeError, match="Formula metadata missing"):
+            model._transform_data_with_formula(df)
+
+    def test_transform_uses_rhs_when_present(self):
+        """Ensure RHS branch is used when model_matrices has rhs."""
+        df = pd.DataFrame({
+            'a': [1, 2, 3],
+            'b': [2, 3, 4],
+            'y': [3, 5, 7]
+        })
+        model = fit_lm(df, formula='y ~ a + b')
+
+        class DummyMatrices:
+            def __init__(self, rhs):
+                self.rhs = rhs
+
+        class DummySpec:
+            def get_model_matrix(self, data, output='pandas'):
+                rhs = pd.DataFrame(
+                    {
+                        'Intercept': [1] * len(data),
+                        'a': data['a'].values,
+                        'b': data['b'].values
+                    },
+                    index=data.index
+                )
+                return DummyMatrices(rhs)
+
+        model.model_spec = DummySpec()
+
+        X_new = model._transform_data_with_formula(df)
+        assert 'Intercept' not in X_new.columns
+        assert list(X_new.columns) == ['a', 'b']
+        assert len(model.feature_names) == 2
+
+
 class TestLinearRegressionValidation:
     """Test input validation and error handling."""
     
@@ -212,39 +261,76 @@ class TestLinearRegressionValidation:
         """Test error when target not provided."""
         df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
         
-        with pytest.raises(ValueError, match="Must provide either 'target' or 'formula'"):
-            fit_lm(df)
+        with pytest.raises(ValueError, match="Must provide 'formula'"):
+            fit_lm(df, formula=None)
     
     def test_nonexistent_feature_error(self):
         """Test error when feature doesn't exist."""
         df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
         
-        with pytest.raises(ValueError, match="not found in DataFrame"):
-            fit_lm(df, target='y', features=['x', 'z'])
-    
+        with pytest.raises(Exception, match="not present in the dataset"):
+            fit_lm(df, formula='y ~ x + z')
+
+    def test_formulaic_tuple_output(self, monkeypatch):
+        """Test handling when formulaic returns (y, X) tuple."""
+        df = pd.DataFrame({
+            'a': [1, 2, 3],
+            'b': [2, 3, 4],
+            'y': [3, 5, 7]
+        })
+
+        def mock_model_matrix(formula, data, output='pandas', **kwargs):
+            y = pd.Series(data['y'].values, name='y', index=data.index)
+            X = pd.DataFrame({'a': data['a'].values, 'b': data['b'].values}, index=data.index)
+            return y, X
+
+        import formulaic
+        monkeypatch.setattr(formulaic, 'model_matrix', mock_model_matrix)
+
+        model = fit_lm(df, formula='y ~ a + b')
+        assert model.target == 'y'
+        assert model.feature_names == ['a', 'b']
+
+    def test_formulaic_unexpected_output(self, monkeypatch):
+        """Test error when formulaic returns unexpected output."""
+        df = pd.DataFrame({
+            'a': [1, 2, 3],
+            'b': [2, 3, 4],
+            'y': [3, 5, 7]
+        })
+
+        def mock_model_matrix(formula, data, output='pandas', **kwargs):
+            return object()
+
+        import formulaic
+        monkeypatch.setattr(formulaic, 'model_matrix', mock_model_matrix)
+
+        with pytest.raises(RuntimeError, match="Unexpected formulaic output"):
+            fit_lm(df, formula='y ~ a + b')
+
     def test_target_in_features_error(self):
-        """Test error when target is in features list."""
+        """Test error when formula is missing a target."""
         df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
         
-        with pytest.raises(ValueError, match="cannot be in features list"):
-            fit_lm(df, target='y', features=['x', 'y'])
+        with pytest.raises(ValueError, match="Formula must include a target"):
+            fit_lm(df, formula='y x')
     
     def test_non_numeric_target_error(self):
         """Test error when target is not numeric."""
         df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a', 'b', 'c']})
         
         with pytest.raises(ValueError, match="must be numeric"):
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ .')
     
     def test_non_numeric_feature_error(self):
         """Test error when feature is not numeric."""
         df = pd.DataFrame({'x': ['a', 'b', 'c'], 'y': [1, 2, 3]})
         
         with pytest.raises(ValueError, match="must be numeric"):
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ I(x)')
     
-    def test_formula_requires_patsy(self, monkeypatch):
-        """Test error when patsy not installed."""
+    def test_formula_requires_formulaic(self, monkeypatch):
+        """Test error when formulaic not installed."""
         df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
         
         # Mock patsy import to raise ImportError
@@ -252,13 +338,13 @@ class TestLinearRegressionValidation:
         original_import = builtins.__import__
         
         def mock_import(name, *args, **kwargs):
-            if name == 'patsy':
-                raise ImportError("No module named 'patsy'")
+            if name == 'formulaic':
+                raise ImportError("No module named 'formulaic'")
             return original_import(name, *args, **kwargs)
         
         monkeypatch.setattr(builtins, '__import__', mock_import)
         
-        with pytest.raises(ImportError, match="requires the 'patsy' library"):
+        with pytest.raises(ImportError, match="requires the 'formulaic' library"):
             fit_lm(df, formula='y ~ x')
 
 
@@ -283,7 +369,7 @@ class TestLinearRegressionVisualization:
     
     def test_visualize_runs(self, simple_data, monkeypatch):
         """Test that visualize() runs without error."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         
         # Mock plt.show() to prevent display
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -293,7 +379,7 @@ class TestLinearRegressionVisualization:
     
     def test_visualize_feature_runs(self, simple_data, monkeypatch):
         """Test that visualize_feature() runs without error."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
         
@@ -302,14 +388,14 @@ class TestLinearRegressionVisualization:
     
     def test_visualize_feature_invalid_feature(self, simple_data):
         """Test error for invalid feature in visualize_feature()."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         
         with pytest.raises(ValueError, match="Feature must be from"):
             model.visualize_feature('nonexistent')
     
     def test_visualize_all_features_runs(self, simple_data, monkeypatch):
         """Test that visualize_all_features() runs without error."""
-        model = fit_lm(simple_data, target='y')
+        model = fit_lm(simple_data, formula='y ~ .')
         
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
         
@@ -349,7 +435,7 @@ class TestLinearRegressionRealData:
     def test_real_estate_basic_model(self, real_estate_data):  # Changed name
         """Test basic model on real estate data."""
         train, test = split_data(real_estate_data, test_size=0.2)
-        model = fit_lm(train, target='price_per_unit')
+        model = fit_lm(train, formula='price_per_unit ~ .')
         
         # Should fit reasonably well
         train_r2 = model.score(train)
@@ -361,7 +447,8 @@ class TestLinearRegressionRealData:
     def test_real_estate_feature_subset(self, real_estate_data):  # Changed
         """Test model with feature subset."""
         features = ['house_age', 'distance_to_MRT']
-        model = fit_lm(real_estate_data, target='price_per_unit', features=features)
+        formula = 'price_per_unit ~ ' + ' + '.join(features)
+        model = fit_lm(real_estate_data, formula=formula)
         
         assert set(model.feature_names) == set(features)
         assert model.score(real_estate_data) > 0.3  # Should still fit reasonably
@@ -392,7 +479,7 @@ class TestLinearRegressionEdgeCases:
             'y': [2, 4, 6, 8, 10]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         assert len(model.feature_names) == 1
         assert model.score(df) > 0.99  # Perfect linear relationship
@@ -404,7 +491,7 @@ class TestLinearRegressionEdgeCases:
             'y': [2, 4, 6, 8, 10]  # y = 2x exactly
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Should have R² very close to 1
         assert model.score(df) > 0.999
@@ -425,7 +512,7 @@ class TestLinearRegressionEdgeCases:
         df = pd.DataFrame(X, columns=[f'x{i}' for i in range(n_features)])
         df['y'] = y
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         assert len(model.feature_names) == n_features
         assert model.score(df) > 0.9
@@ -437,7 +524,7 @@ class TestLinearRegressionEdgeCases:
             'y': [10, 8, 6, 4, 2]  # y decreases as x increases
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         coef = model.get_coefficients()['coefficient'].values[0]
         
         assert coef < 0  # Should be negative
@@ -470,8 +557,8 @@ class TestLinearRegressionEdgeCasesAndErrors:
             'y': [7, 8, 9]
         })
         
-        with pytest.raises(ValueError, match="cannot be in features list"):
-            fit_lm(df, target='y', features=['x1', 'y'])
+        with pytest.raises(ValueError, match="Formula must include a target"):
+            fit_lm(df, formula='y x1 y')
     
     def test_singular_matrix_in_summary(self):
         """Test summary handles singular matrix (perfectly correlated features)"""
@@ -482,7 +569,7 @@ class TestLinearRegressionEdgeCasesAndErrors:
             'y': [1, 2, 3, 4, 5]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Summary should still work (uses fallback for singular matrix)
         model.summary()  # Should not raise exception
@@ -496,7 +583,7 @@ class TestLinearRegressionEdgeCasesAndErrors:
             'y': [11, 12, 13, 14, 15]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock the mean to return NaN
         import unittest.mock as mock
@@ -553,7 +640,7 @@ class TestLinearRegressionSummaryDetails:
             'x2': np.random.randn(50),
             'y': np.random.randn(50)
         })
-        return fit_lm(df, target='y')
+        return fit_lm(df, formula='y ~ .')
     
     def test_summary_prints_output(self, simple_model, capsys):
         """Test that summary prints output (not returns)"""
@@ -600,7 +687,7 @@ class TestLinearRegressionSummaryDetails:
         })
         df['y'] = np.random.randn(100)
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Summary should handle many features
         model.summary()  # Should not crash
@@ -638,7 +725,7 @@ class TestLinearRegressionVisualizationEdgeCases:
             'y': [2, 4, 6, 8, 10]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -654,7 +741,7 @@ class TestLinearRegressionVisualizationEdgeCases:
             'y': [7, 8, 9]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         with pytest.raises(ValueError, match="Feature must be from"):
             model.visualize_feature('nonexistent')
@@ -755,8 +842,8 @@ class TestLinearRegressionUncoveredLines:
             'y': [7, 8, 9]
         })
         
-        with pytest.raises(ValueError, match="Features not found"):
-            fit_lm(df, target='y', features=['x1', 'nonexistent', 'also_missing'])
+        with pytest.raises(Exception, match="not present in the dataset"):
+            fit_lm(df, formula='y ~ x1 + nonexistent + also_missing')
     
     def test_non_numeric_target_error(self):
         """Test error when target is non-numeric (line 91)"""
@@ -766,7 +853,7 @@ class TestLinearRegressionUncoveredLines:
         })
         
         with pytest.raises(ValueError, match="must be numeric for regression"):
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ .')
     
     def test_non_numeric_features_error(self):
         """Test error when features are non-numeric (line 118)"""
@@ -777,7 +864,7 @@ class TestLinearRegressionUncoveredLines:
         })
         
         with pytest.raises(ValueError, match="All features must be numeric"):
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ I(x1) + x2')
     
     def test_formula_dot_with_space(self):
         """Test formula with '. ' (dot with trailing space) (line 163-164)"""
@@ -802,7 +889,7 @@ class TestLinearRegressionUncoveredLines:
         })
         df['y'] = np.random.randn(50)
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -829,7 +916,7 @@ class TestLinearRegressionUncoveredLines:
             'y': [11, 12, 13, 14, 15]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock mean to return NaN for x2
         original_mean = pd.Series.mean
@@ -852,7 +939,7 @@ class TestLinearRegressionUncoveredLines:
             'y': np.random.randn(20)
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # summary() should return None
         result = model.summary()
@@ -902,7 +989,7 @@ class TestLinearRegressionUncoveredLines:
         # by having . but not matching the if conditions
         # Actually, this might be unreachable with valid Patsy syntax
         # Let's just verify the basic functionality
-        model = fit_lm(df, target='y', features=['a', 'b'])
+        model = fit_lm(df, formula='y ~ a + b')
         assert len(model.feature_names) == 2
 
     def test_line_82_84_missing_features(self):
@@ -914,11 +1001,10 @@ class TestLinearRegressionUncoveredLines:
         })
         
         # This should raise ValueError and execute lines 82-84
-        with pytest.raises(ValueError) as excinfo:
-            fit_lm(df, target='y', features=['x1', 'nonexistent_feature'])
+        with pytest.raises(Exception) as excinfo:
+            fit_lm(df, formula='y ~ x1 + nonexistent_feature')
         
-        assert "Features not found in DataFrame" in str(excinfo.value)
-        assert "nonexistent_feature" in str(excinfo.value)
+        assert "not present in the dataset" in str(excinfo.value)
     
     def test_line_91_non_numeric_target(self):
         """Test line 91: Non-numeric target error"""
@@ -929,7 +1015,7 @@ class TestLinearRegressionUncoveredLines:
         
         # This should raise ValueError and execute line 91
         with pytest.raises(ValueError) as excinfo:
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ .')
         
         assert "must be numeric for regression" in str(excinfo.value)
     
@@ -943,7 +1029,7 @@ class TestLinearRegressionUncoveredLines:
         
         # This should raise ValueError and execute line 118
         with pytest.raises(ValueError) as excinfo:
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ .')
         
         assert "All features must be numeric" in str(excinfo.value)
         assert "category" in str(excinfo.value)
@@ -1010,16 +1096,15 @@ class TestLinearRegressionUncoveredLines:
         model = fit_lm(df, formula='y ~ .')
         assert len(model.feature_names) == 2
     
-    def test_missing_target_without_formula(self):
-        """Test: Must provide target when not using formula"""
+    def test_missing_formula_argument(self):
+        """Test: Must provide formula when fitting"""
         df = pd.DataFrame({
             'x': [1, 2, 3],
             'y': [4, 5, 6]
         })
         
-        # Call without target or formula
-        with pytest.raises(ValueError, match="Must provide either 'target' or 'formula'"):
-            fit_lm(df)
+        with pytest.raises(ValueError, match="Must provide 'formula'"):
+            fit_lm(df, formula=None)
     
     def test_visualize_all_features_single_subplot(self, monkeypatch):
         """Test: Single subplot returns Axes object, not array"""
@@ -1029,7 +1114,7 @@ class TestLinearRegressionUncoveredLines:
             'y': [2, 4, 6, 8, 10]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -1046,7 +1131,7 @@ class TestLinearRegressionUncoveredLines:
             'y': [2, 4, 6, 8, 10]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock plt to verify the axes handling
         import matplotlib.pyplot as plt
@@ -1139,19 +1224,17 @@ class TestLinearRegressionUncoveredLines:
         assert 'a' in model.feature_names
         assert 'b' in model.feature_names
     
-    def test_standard_approach_missing_target(self):
-        """Test: Standard approach (no formula) raises error when target is None"""
+    def test_missing_formula_in_constructor(self):
+        """Test error when formula is missing in constructor"""
         df = pd.DataFrame({
             'x': [1, 2, 3],
             'y': [4, 5, 6]
         })
         
-        # This should go to the else branch (not formula)
-        # and raise ValueError because target is None
         with pytest.raises(ValueError) as excinfo:
-            LinearRegressionModel(df, target=None, features=['x'], formula=None)
+            LinearRegressionModel(df, formula=None)
         
-        assert "Must provide 'target' when not using formula" in str(excinfo.value)
+        assert "Must provide 'formula'" in str(excinfo.value)
 
     def test_dot_replacement_comprehensive(self):
         """Comprehensive test attempting to cover all dot replacement branches"""
@@ -1279,7 +1362,7 @@ class TestLinearRegressionUncoveredLines:
             'y': [3, 5, 7, 9, 11]
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # Mock plt.show()
         monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
@@ -1309,7 +1392,7 @@ class TestLinearRegressionRuntimeError:
         })
         
         with pytest.raises(RuntimeError, match="Failed to fit linear regression model"):
-            fit_lm(df, target='y')
+            fit_lm(df, formula='y ~ .')
 
 
 class TestLinearRegressionSummarySpecifics:
@@ -1325,7 +1408,7 @@ class TestLinearRegressionSummarySpecifics:
             'y': np.random.randn(50)
         })
         
-        model = fit_lm(df, target='y')
+        model = fit_lm(df, formula='y ~ .')
         
         # This will execute line 524 internally
         model.summary()

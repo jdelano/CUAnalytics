@@ -32,7 +32,7 @@ class SVMModel:
         Unique class labels
     """
     
-    def __init__(self, df, target, C=1.0):
+    def __init__(self, df, C=1.0, formula=None):
         """
         Create and fit a Support Vector Machine model.
         
@@ -40,20 +40,58 @@ class SVMModel:
         -----------
         df : pd.DataFrame
             DataFrame with features and target
-        target : str
-            Name of target column
         C : float, default=1.0
             Regularization parameter. Higher values mean stricter margin
             (fewer misclassifications allowed during training).
             Lower values allow more flexibility (wider margin, more errors ok).
+        formula : str
+            Formula for specifying target and features
         """
         self.df = df
-        self.target = target
         self.C = C
-        
-        # Separate features and target
-        self.X = df.drop(target, axis=1)
-        self.y = df[target]
+        self.formula = formula
+        self.model_spec = None
+
+        if formula is None:
+            raise ValueError("Must provide 'formula' for model specification")
+
+        try:
+            from formulaic import model_matrix
+        except ImportError:
+            raise ImportError(
+                "Formula support requires the 'formulaic' library.\n"
+                "Install it with: pip install formulaic"
+            )
+
+        if '~' not in formula:
+            raise ValueError("Formula must include a target (e.g., 'class ~ x1 + x2').")
+
+        lhs, rhs = formula.split('~', 1)
+        lhs = lhs.strip()
+        rhs = rhs.strip()
+
+        if lhs and lhs not in df.columns and lhs.isidentifier():
+            raise ValueError(f"Target '{lhs}' not found in data")
+
+        y = df[lhs]
+        df_rhs = df.drop(columns=[lhs])
+        model_matrices = model_matrix(rhs, df_rhs, output='pandas')
+
+        if hasattr(model_matrices, 'rhs'):
+            X = model_matrices.rhs
+        else:
+            X = model_matrices
+
+        self.model_spec = getattr(model_matrices, 'model_spec', None)
+        self.target = lhs
+
+        if 'Intercept' in X.columns:
+            X = X.drop('Intercept', axis=1)
+
+        self.df = X.copy()
+        self.df[self.target] = y
+        self.X = X
+        self.y = y
         
         # Store feature and class info
         self.feature_names = list(self.X.columns)
@@ -67,9 +105,15 @@ class SVMModel:
                 f"Please filter your data to include only 2 classes."
             )
         
-        # Check if features are numeric
-        non_numeric = [col for col in self.X.columns 
-                       if not pd.api.types.is_numeric_dtype(self.X[col])]
+        # Check if source features are numeric
+        used_vars = set()
+        if self.model_spec is not None:
+            used_vars = {var for var in getattr(self.model_spec, 'variables', set())
+                         if var in df_rhs.columns}
+        if not used_vars:
+            used_vars = set(df_rhs.columns)
+        non_numeric = [col for col in used_vars
+                       if not pd.api.types.is_numeric_dtype(df_rhs[col])]
         if non_numeric:
             raise ValueError(
                 f"All features must be numeric. Non-numeric features found: {non_numeric}\n"
@@ -105,8 +149,86 @@ class SVMModel:
         if not hasattr(self, 'svm') or self.svm is None:
             raise RuntimeError(
                 "Model has not been fitted yet. "
-                "Create model with: svm = fit_svm(df, target='column_name')"
+                "Create model with: svm = fit_svm(df, formula='class ~ x1 + x2')"
             )
+
+    def _compute_classification_metrics(self, y_true, y_pred):
+        """Compute confusion-matrix based metrics."""
+        cm = confusion_matrix(y_true, y_pred, labels=self.classes)
+        total = cm.sum()
+        accuracy = np.trace(cm) / total if total else 0.0
+        row_marginals = cm.sum(axis=1)
+        col_marginals = cm.sum(axis=0)
+        expected = (row_marginals * col_marginals).sum() / (total ** 2) if total else 0.0
+        kappa = (accuracy - expected) / (1 - expected) if (1 - expected) else 0.0
+
+        per_class = {}
+        for idx, label in enumerate(self.classes):
+            tp = cm[idx, idx]
+            fn = cm[idx, :].sum() - tp
+            fp = cm[:, idx].sum() - tp
+            tn = total - tp - fn - fp
+
+            precision = tp / (tp + fp) if (tp + fp) else 0.0
+            recall = tp / (tp + fn) if (tp + fn) else 0.0
+            specificity = tn / (tn + fp) if (tn + fp) else 0.0
+            f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+
+            per_class[label] = {
+                'precision': precision,
+                'recall': recall,
+                'sensitivity': recall,
+                'specificity': specificity,
+                'f1': f1
+            }
+
+        return {
+            'accuracy': accuracy,
+            'kappa': kappa,
+            'confusion_matrix': cm,
+            'per_class': per_class,
+        }
+
+    def _print_score_report(self, report):
+        """Print a summary of classification performance."""
+        print("\nSCORE REPORT")
+        print("=" * 60)
+        print(f"Accuracy: {report['accuracy']:.2%}")
+        print(f"Kappa: {report['kappa']:.4f}")
+
+        conf_df = pd.DataFrame(
+            report['confusion_matrix'],
+            index=[f"Actual {c}" for c in self.classes],
+            columns=[f"Pred {c}" for c in self.classes]
+        )
+        print("\nConfusion Matrix:")
+        print(conf_df.to_string())
+
+        per_class_df = pd.DataFrame(report['per_class']).T
+        print("\nPer-Class Metrics:")
+        print(per_class_df.to_string(float_format=lambda x: f"{x:.4f}"))
+
+
+    def _transform_data_with_formula(self, df):
+        """
+        Transform data using the stored formula specification.
+        """
+        if getattr(self, 'model_spec', None) is None:
+            raise RuntimeError("Formula metadata missing; cannot transform new data.")
+
+        rhs_spec = getattr(self.model_spec, 'rhs', self.model_spec)
+        df_rhs = df.drop(columns=[self.target], errors='ignore')
+        model_matrices = rhs_spec.get_model_matrix(df_rhs, output='pandas')
+
+        if hasattr(model_matrices, 'rhs'):
+            X_new = model_matrices.rhs
+        else:
+            X_new = model_matrices
+
+        if 'Intercept' in X_new.columns:
+            X_new = X_new.drop('Intercept', axis=1)
+
+        return X_new
     
     def predict(self, df):
         """
@@ -123,12 +245,13 @@ class SVMModel:
             Predicted class labels
         """
         self._check_fitted()
-        X = df[self.feature_names] if self.target in df.columns else df
-        return self.svm.predict(X)
+        X = self._transform_data_with_formula(df)
+        predictions = self.svm.predict(X)
+        return pd.Series(predictions, index=df.index, name=self.target)
     
     def score(self, df):
         """
-        Calculate accuracy on a dataset.
+        Calculate and print classification metrics on a dataset.
         
         Parameters:
         -----------
@@ -137,13 +260,17 @@ class SVMModel:
         
         Returns:
         --------
-        accuracy : float
-            Accuracy score (0 to 1)
+        metrics : dict
+            Dictionary of accuracy, confusion matrix, and derived metrics
         """
         self._check_fitted()
-        X = df[self.feature_names]
+        X = self._transform_data_with_formula(df)
         y_true = df[self.target]
-        return self.svm.score(X, y_true)
+
+        y_pred = self.svm.predict(X)
+        report = self._compute_classification_metrics(y_true, y_pred)
+        self._print_score_report(report)
+        return report
     
     def get_support_vectors(self):
         """
@@ -201,6 +328,36 @@ class SVMModel:
         margin = 2.0 / np.linalg.norm(w)
         
         return margin
+
+    def get_metrics(self):
+        """
+        Calculate classification metrics on training data.
+
+        Returns:
+        --------
+        metrics : dict
+            Dictionary with model metrics and statistics
+        """
+        self._check_fitted()
+
+        metrics = {
+            'model_type': 'svm',
+            'target': self.target,
+            'n_samples': len(self.y),
+            'n_features': len(self.feature_names),
+            'feature_names': self.feature_names,
+            'classes': self.classes
+        }
+
+        y_pred = self.svm.predict(self.X)
+        y_true = self.y
+
+        metrics['score'] = self._compute_classification_metrics(y_true, y_pred)
+        metrics['coefficients'] = self.get_coefficients()
+        metrics['margin_width'] = self.get_margin_width()
+        metrics['n_support_vectors'] = int(self.svm.n_support_.sum())
+
+        return metrics
     
     def visualize(self, figsize=(12, 5)):
         """
@@ -384,14 +541,14 @@ class SVMModel:
         
         Returns:
         --------
-        summary_dict : dict
-            Dictionary with model information and metrics
+        None
         """
         self._check_fitted()
         
         # Get predictions and metrics
-        y_pred_train = self.predict(self.df)
-        train_fit = self.score(self.df)
+        y_pred_train = self.svm.predict(self.X)
+        train_metrics = self._compute_classification_metrics(self.y, y_pred_train)
+        train_fit = train_metrics['accuracy']
         conf_matrix_train = confusion_matrix(self.y, y_pred_train)
         
         # Get support vector info
@@ -481,29 +638,15 @@ class SVMModel:
         print("\nTraining Confusion Matrix:")
         conf_df_train = pd.DataFrame(
             conf_matrix_train,
-            index=[f"True {c}" for c in self.classes],
+            index=[f"Actual {c}" for c in self.classes],
             columns=[f"Pred {c}" for c in self.classes]
         )
         print(conf_df_train.to_string())
+        print(f"\nKappa: {train_metrics['kappa']:.4f}")
         
         print("\n" + "="*70)
         
-        # Return summary dictionary
-        summary_dict = {
-            'C': self.C,
-            'n_support_vectors': n_support,
-            'support_vector_pct': support_pct,
-            'margin_width': margin,
-            'coefficients': self.get_coefficients(),
-            'train_fit': train_fit,
-            'train_predictions': y_pred_train,
-            'train_confusion_matrix': conf_matrix_train,
-            'classes': self.classes,
-            'n_features': len(self.feature_names)
-        }
-        
-
-def fit_svm(df, target, C=1.0):
+def fit_svm(df, C=1.0, formula=None):
     """
     Fit a Support Vector Machine model for binary classification.
     
@@ -515,13 +658,13 @@ def fit_svm(df, target, C=1.0):
     -----------
     df : pd.DataFrame
         Training data with features and target column
-    target : str
-        Name of the target column
     C : float, default=1.0
         Regularization parameter (soft margin control).
         - Higher values (e.g., 10, 100) = stricter margin, fewer errors allowed
         - Lower values (e.g., 0.1, 0.01) = more flexible, wider margin
         - Default of 1.0 is usually a good starting point
+    formula : str
+        Formula for specifying target and features
     
     Returns:
     --------
@@ -534,9 +677,11 @@ def fit_svm(df, target, C=1.0):
     >>> df = load_iris_data()
     >>> df_binary = df[df['species'].isin(['Iris-setosa', 'Iris-versicolor'])]
     >>> train, test = split_data(df_binary, target='species', test_size=0.2)
-    >>> svm = fit_svm(train, target='species', C=1.0)
+    >>> svm = fit_svm(train, formula='species ~ .', C=1.0)
     >>> svm.summary()
-    >>> train_acc = svm.score(train)
-    >>> test_acc = svm.score(test)
+    >>> train_acc = svm.score(train)['accuracy']
+    >>> test_acc = svm.score(test)['accuracy']
     """
-    return SVMModel(df, target, C=C)
+    if formula is None:
+        raise ValueError("Must provide 'formula' for model specification")
+    return SVMModel(df, C=C, formula=formula)

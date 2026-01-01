@@ -6,6 +6,7 @@ Linear regression implementation for ITM 4150.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
@@ -20,142 +21,96 @@ class LinearRegressionModel:
     -----------
     df : pd.DataFrame
         DataFrame with features and target
-    target : str, optional
-        Name of target column (required unless using formula)
-    features : list of str, optional
-        List of feature columns to use. If None, uses all except target.
-    formula : str, optional
+    formula : str
         R-style formula for specifying the model
     """
     
-    def __init__(self, df, target=None, features=None, formula=None):
+    def __init__(self, df, formula):
         self.original_df = df  # Keep original for reference
         self.formula = formula
-        self.design_info = None  # For formula transformations
-        
-        if formula is not None:
-            # Use patsy to parse formula and create transformed dataframe
-            try:
-                from patsy import dmatrices
-            except ImportError:
-                raise ImportError(
-                    "Formula support requires the 'patsy' library.\n"
-                    "Install it with: pip install patsy"
-                )
-            
-            # Expand '.' to all column names (patsy sometimes has issues with .)
-            if '~' in formula:
-                lhs, rhs = formula.split('~')
-                lhs = lhs.strip()
-                rhs = rhs.strip()
-                
-                # Handle the . notation
-                if '.' in rhs:
-                    # Get target from LHS
-                    target_from_formula = lhs
-                    if target_from_formula not in df.columns:
-                        raise ValueError(f"Target '{target_from_formula}' not found in data")
-                    
-                    # Get all features except target
-                    all_features = [col for col in df.columns if col != target_from_formula]
-                    
-                    # Handle exclusions (. - feature1 - feature2)
-                    excluded_features = []
-                    if '-' in rhs:
-                        # Parse exclusions
-                        parts = rhs.split('-')
-                        # First part should contain the .
-                        base = parts[0].strip()
-                        # Remaining parts are exclusions
-                        for part in parts[1:]:
-                            excluded = part.strip().split('+')[0].strip()  # Handle '. - x + y'
-                            excluded_features.append(excluded)
-                        
-                        # Remove excluded features
-                        all_features = [f for f in all_features if f not in excluded_features]
-                        
-                        # Rebuild RHS
-                        rhs = ' + '.join(all_features)
-                        
-                        # Add back any additions after the exclusions
-                        if '+' in parts[-1]:
-                            additions = ' + '.join(parts[-1].split('+')[1:])
-                            rhs = rhs + ' + ' + additions
-                    
-                    elif rhs == '.' or rhs == '. ':
-                        # Simple case: just all features
-                        rhs = ' + '.join(all_features)
-                    else:
-                        # Case like '. + interaction'
-                        rhs = rhs.replace('.', ' + '.join(all_features))
-                    
-                    formula = f"{lhs} ~ {rhs}"
-            
-            # Parse formula and create design matrices
-            y, X = dmatrices(formula, df, return_type='dataframe')
-            
-            # Store design info for transforming new data later
-            self.design_info = X.design_info
-            
-            # Extract target name
-            self.target = y.columns[0]
-            
-            # Remove intercept (sklearn adds its own)
-            if 'Intercept' in X.columns:
-                X = X.drop('Intercept', axis=1)
-            
-            # Create working dataframe with target + transformed features
-            self.df = X.copy()
-            self.df[self.target] = y.iloc[:, 0]
-            
-            # Feature names are the transformed column names
-            self.feature_names = list(X.columns)
-            
+        self.model_spec = None  # For formula transformations
+
+        if formula is None:
+            raise ValueError("Must provide 'formula' for model specification")
+
+        # Use formulaic to parse formula and create transformed dataframe
+        try:
+            from formulaic import model_matrix
+        except ImportError:
+            raise ImportError(
+                "Formula support requires the 'formulaic' library.\n"
+                "Install it with: pip install formulaic"
+            )
+
+        if '~' not in formula:
+            raise ValueError("Formula must include a target (e.g., 'y ~ x1 + x2').")
+
+        lhs = formula.split('~', 1)[0].strip()
+        if lhs and lhs not in df.columns and lhs.isidentifier():
+            raise ValueError(f"Target '{lhs}' not found in data")
+        if lhs in df.columns and not pd.api.types.is_numeric_dtype(df[lhs]):
+            raise ValueError(
+                f"Target variable '{lhs}' must be numeric for regression.\n"
+                f"Found type: {df[lhs].dtype}"
+            )
+
+        model_matrices = model_matrix(formula, df, output='pandas')
+
+        if hasattr(model_matrices, 'lhs') and hasattr(model_matrices, 'rhs'):
+            y = model_matrices.lhs
+            X = model_matrices.rhs
+        elif isinstance(model_matrices, tuple) and len(model_matrices) == 2:
+            y, X = model_matrices
         else:
-            # Standard approach (no formula)
-            if target is None:
-                raise ValueError("Must provide 'target' when not using formula")
-            
-            self.target = target
-            
-            # Determine which features to use
-            if features is None:
-                # Use all columns except target
-                self.df = df.copy()
-                self.feature_names = [col for col in df.columns if col != target]
-            else:
-                # Use specified features only
-                missing = [f for f in features if f not in df.columns]
-                if missing:
-                    raise ValueError(f"Features not found in DataFrame: {missing}")
-                if target in features:
-                    raise ValueError(f"Target '{target}' cannot be in features list")
-                
-                # Create working dataframe with only selected features + target
-                self.df = df[features + [target]].copy()
-                self.feature_names = features
+            raise RuntimeError("Unexpected formulaic output when building design matrices.")
+
+        self.model_spec = getattr(model_matrices, 'model_spec', None)
+
+        if isinstance(y, pd.Series):
+            y = y.to_frame()
+
+        # Extract target name
+        self.target = y.columns[0]
+
+        # Remove intercept (sklearn adds its own)
+        if 'Intercept' in X.columns:
+            X = X.drop('Intercept', axis=1)
+
+        # Create working dataframe with target + transformed features
+        self.df = X.copy()
+        self.df[self.target] = y.iloc[:, 0]
+
+        # Feature names are the transformed column names
+        self.feature_names = list(X.columns)
         
         # Now extract X and y from the working dataframe
         self.X = self.df[self.feature_names]
         self.y = self.df[self.target]
         
-        # Validate target is numeric
-        if not pd.api.types.is_numeric_dtype(self.y):
-            raise ValueError(
-                f"Target variable '{self.target}' must be numeric for regression.\n"
-                f"Found type: {self.y.dtype}"
-            )
-        
-        # Check if features are numeric
-        non_numeric = [col for col in self.X.columns 
-                       if not pd.api.types.is_numeric_dtype(self.X[col])]
+        # Check if source features are numeric (unless explicitly encoded)
+        used_vars = set()
+        if self.model_spec is not None:
+            rhs_spec = getattr(self.model_spec, 'rhs', self.model_spec)
+            used_vars = {var for var in getattr(rhs_spec, 'variables', set())
+                         if var in df.columns and var != self.target}
+        if not used_vars:
+            used_vars = {col for col in df.columns if col != self.target}
+        non_numeric = [col for col in used_vars
+                       if not pd.api.types.is_numeric_dtype(df[col])]
+        if non_numeric:
+            allowed = set()
+            for col in non_numeric:
+                pattern = r'(?<![\w.])C\(\s*' + re.escape(col) + r'(\s*[,)])'
+                if re.search(pattern, formula):
+                    allowed.add(col)
+            non_numeric = [col for col in non_numeric if col not in allowed]
         if non_numeric:
             raise ValueError(
                 f"All features must be numeric. Non-numeric features found: {non_numeric}\n"
                 "Hint: Use pd.get_dummies() to convert categorical features,\n"
                 "      or use formula syntax with C() for categorical variables."
             )
-        
+
         # Create and fit model
         try:
             self._fit()
@@ -174,7 +129,7 @@ class LinearRegressionModel:
         if not hasattr(self, 'model') or self.model is None:
             raise RuntimeError(
                 "Model has not been fitted yet. "
-                "Create model with: model = fit_linear_regression(df, target='column_name')"
+                "Create model with: model = fit_lm(df, formula='y ~ x1 + x2')"
             )
     
     def _transform_data_with_formula(self, df):
@@ -191,9 +146,16 @@ class LinearRegressionModel:
         X : pd.DataFrame
             Transformed feature matrix (without intercept)
         """
-        from patsy import dmatrix
-        
-        X_new = dmatrix(self.design_info, df, return_type='dataframe')
+        if getattr(self, 'model_spec', None) is None:
+            raise RuntimeError("Formula metadata missing; cannot transform new data.")
+
+        rhs_spec = getattr(self.model_spec, 'rhs', self.model_spec)
+        model_matrices = rhs_spec.get_model_matrix(df, output='pandas')
+
+        if hasattr(model_matrices, 'rhs'):
+            X_new = model_matrices.rhs
+        else:
+            X_new = model_matrices
         
         # Remove intercept if present
         if 'Intercept' in X_new.columns:
@@ -218,14 +180,9 @@ class LinearRegressionModel:
         """
         self._check_fitted()
         
-        if self.formula is not None:
-            # Transform new data using formula
-            X = self._transform_data_with_formula(df)
-            return self.model.predict(X)
-        else:
-            # Standard approach
-            X = df[self.feature_names] if self.target in df.columns else df
-            return self.model.predict(X)
+        X = self._transform_data_with_formula(df)
+        predictions = self.model.predict(X)
+        return pd.Series(predictions, index=df.index, name=self.target)
     
     def score(self, df):
         """
@@ -249,40 +206,100 @@ class LinearRegressionModel:
         """
         self._check_fitted()
         
-        if self.formula is not None:
-            X = self._transform_data_with_formula(df)
-        else:
-            X = df[self.feature_names]
-        
+        X = self._transform_data_with_formula(df)
         y_true = df[self.target]
         
         return self.model.score(X, y_true)
     
-    def get_metrics(self, df):
+    def get_metrics(self):
         """
-        Calculate multiple regression metrics on a dataset.
-        
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            Data with true target values
-        
+        Calculate regression metrics and model statistics from training data.
+
         Returns:
         --------
         metrics : dict
-            Dictionary with R², RMSE, and MAE
+            Dictionary with model metrics and statistics
         """
         self._check_fitted()
-        
-        y_true = df[self.target]
-        y_pred = self.predict(df)
-        
+
+        from scipy import stats
+
+        y_pred = self.model.predict(self.X)
+        residuals = self.y - y_pred
+        n = len(self.y)
+        k = len(self.feature_names)
+
+        r2 = r2_score(self.y, y_pred)
+        adj_r2 = 1 - (1 - r2) * (n - 1) / (n - k - 1)
+        rmse = np.sqrt(mean_squared_error(self.y, y_pred))
+        mae = mean_absolute_error(self.y, y_pred)
+
+        rse = np.sqrt(np.sum(residuals**2) / (n - k - 1))
+        X_with_intercept = np.column_stack([np.ones(n), self.X])
+        try:
+            var_covar = rse**2 * np.linalg.inv(X_with_intercept.T @ X_with_intercept)
+            std_errors = np.sqrt(np.diag(var_covar))
+        except np.linalg.LinAlgError:
+            std_errors = np.ones(k + 1) * rse / np.sqrt(n)
+
+        all_coefs = np.concatenate([[self.model.intercept_], self.model.coef_])
+        t_stats = all_coefs / std_errors
+        p_values = 2 * (1 - stats.t.cdf(np.abs(t_stats), df=n - k - 1))
+
+        t_critical = stats.t.ppf(0.975, df=n - k - 1)
+        conf_lower = all_coefs - t_critical * std_errors
+        conf_upper = all_coefs + t_critical * std_errors
+
+        ss_total = np.sum((self.y - self.y.mean())**2)
+        ss_regression = np.sum((y_pred - self.y.mean())**2)
+        ss_residual = np.sum(residuals**2)
+
+        ms_regression = ss_regression / k
+        ms_residual = ss_residual / (n - k - 1)
+
+        f_statistic = ms_regression / ms_residual
+        f_pvalue = 1 - stats.f.cdf(f_statistic, k, n - k - 1)
+
+        readable_features = [f.replace(':', ' × ') for f in self.feature_names]
+        coef_rows = [{
+            'feature': '(Intercept)',
+            'coefficient': all_coefs[0],
+            'std_error': std_errors[0],
+            't_stat': t_stats[0],
+            'p_value': p_values[0],
+            'conf_lower': conf_lower[0],
+            'conf_upper': conf_upper[0]
+        }]
+
+        for i, feature in enumerate(readable_features, start=1):
+            coef_rows.append({
+                'feature': feature,
+                'coefficient': all_coefs[i],
+                'std_error': std_errors[i],
+                't_stat': t_stats[i],
+                'p_value': p_values[i],
+                'conf_lower': conf_lower[i],
+                'conf_upper': conf_upper[i]
+            })
+
         metrics = {
-            'R2': r2_score(y_true, y_pred),
-            'RMSE': np.sqrt(mean_squared_error(y_true, y_pred)),
-            'MAE': mean_absolute_error(y_true, y_pred)
+            'model_type': 'linear_regression',
+            'target': self.target,
+            'n_samples': n,
+            'n_features': k,
+            'feature_names': self.feature_names,
+            'metrics': {
+                'r2': r2,
+                'adj_r2': adj_r2,
+                'rmse': rmse,
+                'mae': mae,
+                'f_statistic': f_statistic,
+                'f_pvalue': f_pvalue
+            },
+            'coefficients': pd.DataFrame(coef_rows),
+            'equation': self.get_equation()
         }
-        
+
         return metrics
     
     def get_coefficients(self):
@@ -408,8 +425,7 @@ class LinearRegressionModel:
         print("  • Residual Plot: Points closer to horizontal line = better fit")
         print("  • Coefficients: Green = positive effect, Red = negative effect")
         
-        if self.formula:
-            print(f"\nModel uses formula: {self.formula}")    
+        print(f"\nModel uses formula: {self.formula}")    
             
     def visualize_feature(self, feature, figsize=(10, 6)):
         """
@@ -497,7 +513,7 @@ class LinearRegressionModel:
         
         Examples:
         ---------
-        >>> model = fit_lm(train, target='monthly_sales')
+        >>> model = fit_lm(train, formula='monthly_sales ~ .')
         >>> model.visualize_all_features()
         >>> model.visualize_all_features(cols=2)  # 2 columns instead of 3
         """
@@ -580,12 +596,11 @@ class LinearRegressionModel:
         
         Returns:
         --------
-        summary_dict : dict
-            Dictionary with model information and metrics
+        None
         
         Examples:
         ---------
-        >>> model = fit_lm(train, target='price')
+        >>> model = fit_lm(train, formula='price ~ .')
         >>> summary = model.summary()
         """
         self._check_fitted()
@@ -767,27 +782,16 @@ class LinearRegressionModel:
         else:
             return ''
 
-def fit_lm(df, target=None, features=None, formula=None):
+def fit_lm(df, formula):
     """
     Fit a linear regression model.
-    
-    Supports three ways to specify the model:
-    1. Auto-detect: Use all features (default)
-    2. Feature list: Specify which features to use
-    3. Formula: R-style formula for interactions, transformations, etc.
     
     Parameters:
     -----------
     df : pd.DataFrame
         Training data with features and target column
-    target : str, optional
-        Name of the target column (required unless using formula)
-    features : list of str, optional
-        List of feature column names to use as predictors.
-        If None and no formula, uses all columns except target.
-    formula : str, optional
+    formula : str
         R-style formula (e.g., 'y ~ x1 + x2' or 'y ~ x1 * x2' for interaction)
-        If provided, target and features are ignored.
     
     Returns:
     --------
@@ -796,13 +800,6 @@ def fit_lm(df, target=None, features=None, formula=None):
     
     Examples:
     ---------
-    >>> # Use all features
-    >>> model = fit_lm(df, target='price')
-    >>> 
-    >>> # Use specific features only
-    >>> model = fit_lm(df, target='price', 
-    ...                features=['sqft', 'bedrooms'])
-    >>> 
     >>> # Use formula for interaction effects
     >>> model = fit_lm(df, formula='price ~ sqft + bedrooms + sqft:bedrooms')
     >>> 
@@ -823,11 +820,6 @@ def fit_lm(df, target=None, features=None, formula=None):
     - y ~ I(x1**2)       : Polynomial term (x1 squared)
     - y ~ np.log(x1)     : Transformed feature
     """
-    if formula is not None:
-        # Formula-based approach
-        return LinearRegressionModel(df, target=None, features=None, formula=formula)
-    elif target is None:
-        raise ValueError("Must provide either 'target' or 'formula'")
-    else:
-        # Standard approach
-        return LinearRegressionModel(df, target=target, features=features, formula=None)
+    if formula is None:
+        raise ValueError("Must provide 'formula' for model specification")
+    return LinearRegressionModel(df, formula=formula)
