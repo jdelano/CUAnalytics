@@ -4,7 +4,7 @@ Tests for entropy module
 import pytest
 import numpy as np
 import pandas as pd
-from itm4150.entropy import calculate_entropy, information_gain
+from cuanalytics.entropy import calculate_entropy, information_gain, plot_entropy
 
 
 class TestCalculateEntropy:
@@ -47,6 +47,15 @@ class TestCalculateEntropy:
         entropy = calculate_entropy(data)
         expected = -(0.75 * np.log2(0.75) + 0.25 * np.log2(0.25))
         assert abs(entropy - expected) < 0.0001
+
+    def test_calculate_entropy_empty_input(self):
+        """Test entropy calculation with empty input"""
+        from cuanalytics.entropy import calculate_entropy
+        import pandas as pd
+        
+        # Empty pandas Series
+        empty_series = pd.Series([], dtype=str)
+        assert calculate_entropy(empty_series) == 0.0
 
 
 class TestInformationGain:
@@ -113,7 +122,7 @@ class TestInformationGain:
     
     def test_with_real_data(self):
         """Test with mushroom dataset"""
-        from itm4150.datasets import load_mushroom_data
+        from cuanalytics.datasets import load_mushroom_data
         df = load_mushroom_data()
         
         # Calculate IG for odor feature
@@ -150,7 +159,7 @@ class TestIntegration:
     
     def test_mushroom_dataset_ranking(self):
         """Test that we can rank features by IG on real data"""
-        from itm4150.datasets import load_mushroom_data
+        from cuanalytics.datasets import load_mushroom_data
         df = load_mushroom_data()
         
         # Calculate IG for multiple features
@@ -163,3 +172,167 @@ class TestIntegration:
         
         # Odor should be highly informative (this is known)
         assert ig_scores['odor'] > 0.5
+        
+
+class TestEntropyVisualization:
+    """Test entropy visualization functions"""
+    
+    def test_plot_entropy_basic(self, monkeypatch):
+        """Test basic entropy plot creation"""
+        # Mock plt.show() to prevent display
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'A', 'B', 'B', 'C'],
+            'class': ['X', 'Y', 'X', 'X', 'Y']
+        })
+        
+        # Should run without error
+        plot_entropy(df, 'feature', target_col='class')
+    
+    def test_plot_entropy_pure_subset(self, monkeypatch):
+        """Test with pure subset (entropy=0)"""
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'A', 'B', 'B'],
+            'class': ['X', 'X', 'Y', 'Y']  # Pure subsets
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+    
+    def test_plot_entropy_single_value(self, monkeypatch):
+        """Test with single feature value"""
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'A', 'A'],
+            'class': ['X', 'Y', 'X']
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+    
+    def test_plot_entropy_many_values(self, monkeypatch):
+        """Test with many feature values"""
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'B', 'C', 'D', 'E', 'F'],
+            'class': ['X', 'Y', 'X', 'Y', 'X', 'Y']
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+    
+    def test_plot_entropy_unequal_proportions(self, monkeypatch):
+        """Test with very unequal proportions"""
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A'] * 90 + ['B'] * 10,
+            'class': ['X', 'Y'] * 50
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+    
+    def test_plot_entropy_different_target_col(self, monkeypatch):
+        """Test with different target column name"""
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'B', 'C'],
+            'label': ['X', 'Y', 'X']
+        })
+        
+        plot_entropy(df, 'feature', target_col='label')
+    
+    def test_plot_entropy_sorting(self, monkeypatch):
+        """Test that values are sorted by entropy"""
+        import matplotlib.pyplot as plt
+        
+        # Track what gets plotted
+        rectangles = []
+        original_Rectangle = plt.Rectangle
+        
+        def mock_Rectangle(*args, **kwargs):
+            rect = original_Rectangle(*args, **kwargs)
+            rectangles.append({
+                'x': args[0][0],
+                'y': args[0][1], 
+                'width': args[1],
+                'height': args[2]
+            })
+            return rect
+        
+        monkeypatch.setattr('matplotlib.pyplot.Rectangle', mock_Rectangle)
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'A', 'B', 'B', 'C', 'C'],
+            'class': ['X', 'X', 'X', 'Y', 'Y', 'Y']  # A=0, B=1, C=0
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+        
+        # Check that heights (entropies) are in increasing order
+        heights = [r['height'] for r in rectangles]
+        assert heights == sorted(heights), "Rectangles should be sorted by entropy"
+    
+    def test_plot_entropy_proportions_sum_to_one(self, monkeypatch):
+        """Test that rectangle widths sum to 1.0"""
+        import matplotlib.pyplot as plt
+        
+        rectangles = []
+        original_Rectangle = plt.Rectangle
+        
+        def mock_Rectangle(*args, **kwargs):
+            rect = original_Rectangle(*args, **kwargs)
+            rectangles.append({
+                'x': args[0][0],
+                'width': args[1]
+            })
+            return rect
+        
+        monkeypatch.setattr('matplotlib.pyplot.Rectangle', mock_Rectangle)
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'B', 'C', 'D'],
+            'class': ['X', 'Y', 'X', 'Y']
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+        
+        # Check widths sum to 1.0
+        total_width = sum(r['width'] for r in rectangles)
+        assert abs(total_width - 1.0) < 1e-10, "Total width should equal 1.0"
+    
+    def test_plot_entropy_rectangles_contiguous(self, monkeypatch):
+        """Test that rectangles are placed contiguously"""
+        import matplotlib.pyplot as plt
+        
+        rectangles = []
+        original_Rectangle = plt.Rectangle
+        
+        def mock_Rectangle(*args, **kwargs):
+            rect = original_Rectangle(*args, **kwargs)
+            rectangles.append({
+                'x': args[0][0],
+                'width': args[1]
+            })
+            return rect
+        
+        monkeypatch.setattr('matplotlib.pyplot.Rectangle', mock_Rectangle)
+        monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)
+        
+        df = pd.DataFrame({
+            'feature': ['A', 'B', 'C'],
+            'class': ['X', 'Y', 'X']
+        })
+        
+        plot_entropy(df, 'feature', target_col='class')
+        
+        # Check that each rectangle starts where previous one ended
+        for i in range(1, len(rectangles)):
+            prev_end = rectangles[i-1]['x'] + rectangles[i-1]['width']
+            curr_start = rectangles[i]['x']
+            assert abs(prev_end - curr_start) < 1e-10, "Rectangles should be contiguous"

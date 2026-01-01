@@ -1,49 +1,334 @@
-# ITM 4150: Advanced Business Analytics and Visualization Toolkit
+# CUAnalytics: Business Analytics Toolkit for Cedarville University
 
-Python companion package for **ITM 4150: Advanced Business Analytics and Visualization** at Cedarville University.
+A Python package designed for Cedarville University students studying business analytics and data science. Provides intuitive, educational implementations of machine learning algorithms, statistical analysis tools, and data visualization capabilities.
 
-This package provides tools for:
-- Information theory and entropy analysis
-- Machine learning fundamentals
-- Data visualization
-- Statistical analysis
-- Business analytics workflows
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Installation
+## 🎯 Purpose
+
+CUAnalytics focuses on **understanding over complexity** - providing student-friendly interfaces to essential analytics techniques with clear, interpretable output that matches what you'd see in statistical software like R, SPSS, or Stata.
+
+## 📦 Installation
+
 ```bash
-pip install itm4150
+pip install cuanalytics
 ```
 
-## Modules
+For development:
+```bash
+pip install cuanalytics[dev]
+```
 
-### Entropy
+## 🚀 Quick Start
 
-Information theory concepts including entropy and information gain calculations.
 ```python
-from itm4150.entropy import calculate_entropy, information_gain
-from itm4150.entropy.visualization import plot_entropy_rectangles
-from itm4150.datasets import load_mushroom_data
+from cuanalytics import load_sales_data, fit_lm, split_data
 
 # Load sample data
+df = load_sales_data()
+
+# Split into train/test
+train, test = split_data(df, target='monthly_sales', test_size=0.2)
+
+# Fit a linear regression model
+model = fit_lm(train, target='monthly_sales')
+
+# View comprehensive statistical output
+model.summary()
+
+# Visualize results
+model.visualize()
+model.visualize_all_features()
+
+# Evaluate on test set
+test_accuracy = model.score(test)
+print(f"Test R²: {test_accuracy:.4f}")
+```
+
+## 📚 Modules
+
+### 🌳 Decision Trees
+
+Build and visualize decision trees for classification tasks.
+
+```python
+from cuanalytics import fit_tree, load_mushroom_data
+
+# Load data
 df = load_mushroom_data()
+train, test = split_data(df, target='class', test_size=0.2)
 
-# Calculate entropy
+# Build decision tree
+tree = fit_tree(train, target='class', max_depth=3, criterion='entropy')
+
+# Visualize tree structure
+tree.visualize()
+
+# Visualize decision regions
+tree.visualize_features('odor', 'spore-print-color')
+
+# Get feature importance
+importance = tree.get_feature_importance()
+
+# View decision rules
+print(tree.get_rules())
+
+# Evaluate
+train_acc = tree.score(train)
+test_acc = tree.score(test)
+```
+
+### 📊 Linear Discriminant Analysis (LDA)
+
+Perform classification with dimensionality reduction.
+
+```python
+from cuanalytics import fit_lda, load_iris_data
+
+# Load data
+df = load_iris_data()
+train, test = split_data(df, target='species', test_size=0.2)
+
+# Fit LDA model
+lda = fit_lda(train, target='species')
+
+# Comprehensive summary
+lda.summary()
+
+# Visualize in discriminant space
+lda.visualize()
+
+# Visualize decision boundaries for specific features
+lda.visualize_features('petal_length', 'petal_width')
+
+# Get discriminant scores
+scores = lda.transform(test)
+
+# Predictions
+predictions = lda.predict(test)
+test_accuracy = lda.score(test)
+```
+
+### 🎯 Support Vector Machines (SVM)
+
+Linear SVM for binary classification with margin visualization.
+
+```python
+from cuanalytics import fit_svm, load_breast_cancer_data
+
+# Load data
+df = load_breast_cancer_data()
+train, test = split_data(df, target='diagnosis', test_size=0.2)
+
+# Fit SVM (C parameter controls margin strictness)
+svm = fit_svm(train, target='diagnosis', C=1.0)
+
+# View model details including support vectors
+svm.summary()
+
+# Visualize support vectors and margin
+svm.visualize()
+
+# Visualize decision boundary
+svm.visualize_features('radius_mean', 'texture_mean')
+
+# Get support vectors
+support_vectors = svm.get_support_vectors()
+
+# Evaluate
+test_accuracy = svm.score(test)
+```
+
+### 📈 Linear Regression
+
+Comprehensive linear regression with formula support for interactions and transformations.
+
+```python
+from cuanalytics import fit_lm, load_real_estate_data
+
+# Load data
+df = load_real_estate_data()
+train, test = split_data(df, target='price_per_unit', test_size=0.2)
+
+# Method 1: Use all features
+model = fit_lm(train, target='price_per_unit')
+
+# Method 2: Select specific features
+model = fit_lm(train, target='price_per_unit', 
+               features=['house_age', 'distance_to_MRT'])
+
+# Method 3: Use R-style formulas for interactions
+model = fit_lm(train, 
+               formula='price_per_unit ~ house_age * num_convenience_stores')
+
+# Statistical summary (like R/SPSS output)
+summary = model.summary()
+# Shows: coefficients, t-statistics, p-values, ANOVA table, R², F-statistic
+
+# Visualizations
+model.visualize()  # Predicted vs actual, residuals, coefficients
+model.visualize_feature('house_age')  # Single feature relationship
+model.visualize_all_features()  # Grid of all features
+
+# Get metrics
+metrics = model.get_metrics(test)
+# Returns: {'R2': ..., 'RMSE': ..., 'MAE': ...}
+
+# Predictions
+predictions = model.predict(test)
+```
+
+#### Formula Syntax
+
+```python
+# Main effects only
+fit_lm(df, formula='y ~ x1 + x2')
+
+# Interaction effects (includes main effects + interaction)
+fit_lm(df, formula='y ~ x1 * x2')
+# Equivalent to: y ~ x1 + x2 + x1:x2
+
+# Interaction only
+fit_lm(df, formula='y ~ x1:x2')
+
+# All features
+fit_lm(df, formula='y ~ .')
+
+# All except some
+fit_lm(df, formula='y ~ . - unwanted_feature')
+
+# Polynomial terms
+fit_lm(df, formula='y ~ x + I(x**2)')
+
+# Transformations
+fit_lm(df, formula='y ~ np.log(x)')
+```
+
+### 📉 Information Theory & Entropy
+
+Calculate entropy and information gain for decision trees and data analysis.
+
+```python
+from cuanalytics.entropy import calculate_entropy, information_gain
+from cuanalytics.entropy.visualization import plot_entropy_rectangles
+
+# Calculate entropy of a variable
 entropy = calculate_entropy(df['class'])
-print(f"Dataset entropy: {entropy:.4f}")
+print(f"Entropy: {entropy:.4f}")
 
-# Calculate information gain for a feature
-children = [df[df['odor'] == val]['class'] for val in df['odor'].unique()]
+# Calculate information gain from a split
+children = [df[df['feature'] == val]['class'] for val in df['feature'].unique()]
 ig = information_gain(df['class'], *children)
 print(f"Information gain: {ig:.4f}")
 
-# Visualize entropy distribution
-plot_entropy(df, 'odor')
+# Visualize entropy with rectangles
+plot_entropy_rectangles(df, feature='odor', target='class')
 ```
 
-## For Students
+### 📊 Dataset Loaders
 
-This package provides helper functions for concepts covered in ITM 4150. Each module corresponds to a major topic area in the course.
+Built-in datasets for practice and examples.
 
-## License
+```python
+from cuanalytics import (
+    load_iris_data,           # Classification (3 classes, 4 features)
+    load_mushroom_data,       # Classification (binary, categorical features)
+    load_breast_cancer_data,  # Classification (binary, 30 features)
+    load_sales_data,          # Regression (synthetic business data)
+    load_real_estate_data,    # Regression (real-world housing data)
+)
 
-MIT License - Free for educational use
+# All loaders return pandas DataFrames
+df = load_iris_data()
+print(df.head())
+print(df.shape)
+```
+
+### 🛠️ Utilities
+
+```python
+from cuanalytics import split_data
+
+# Train/test split with optional stratification
+train, test = split_data(df, target='species', test_size=0.2, random_state=42)
+
+# Stratified split (default for classification)
+train, test = split_data(df, target='class', test_size=0.3, stratify=True)
+```
+
+## 🎓 Educational Focus
+
+This package is designed for **learning**, not production use. Key features:
+
+- **Clear Output**: Statistical summaries match formats from R, SPSS, Stata
+- **Visualizations**: Built-in plotting for every algorithm
+- **Interpretability**: Methods to explain model decisions
+- **Consistency**: Uniform API across all models (`fit_*`, `predict`, `score`, `summary`, `visualize`)
+- **Ease of Use**: Simple, readable code that students can understand
+
+## 🔄 Consistent API
+
+All models follow the same pattern:
+
+```python
+# Fit model
+model = fit_*(train_data, target='target_column')
+
+# Or with options
+model = fit_*(train_data, target='target_column', param1=value1, param2=value2)
+
+# Make predictions
+predictions = model.predict(test_data)
+
+# Evaluate performance
+accuracy = model.score(test_data)  # or R² for regression
+
+# View detailed summary
+model.summary()
+
+# Visualize
+model.visualize()
+model.visualize_features('feature1', 'feature2')  # For most models
+```
+
+## 📖 Documentation
+
+For detailed documentation on each module:
+
+```python
+# Get help on any function
+help(fit_lm)
+help(fit_tree)
+
+# View docstrings
+from cuanalytics import fit_lda
+print(fit_lda.__doc__)
+```
+
+## 🤝 Contributing
+
+This package is developed for educational purposes. Suggestions and improvements welcome!
+
+## 📝 License
+
+MIT License - Free for educational and commercial use.
+
+## 🎯 Course Alignment
+
+Modules are designed to support courses in:
+- Business Analytics and Visualization
+- Data Science fundamentals
+- Machine Learning introduction
+
+## 👨‍🏫 Author
+
+**Dr. John D. Delano**  
+Professor of IT Management, Cedarville University  
+jdelano@cedarville.edu
+
+## 🔗 Links
+
+- [GitHub Repository](https://github.com/jdelano/cuanalytics)
+- [PyPI Package](https://pypi.org/project/cuanalytics/)
+- [Report Issues](https://github.com/jdelano/cuanalytics/issues)

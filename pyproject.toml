@@ -3,23 +3,28 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "itm4150"
-version = "0.1.2"
+name = "cuanalytics"
+version = "0.2.0"
 authors = [
-    {name = "John Delano", email = "jdelano@cedarville.edu"}
+    {name = "Dr. John D. Delano", email = "jdelano@cedarville.edu"}
 ]
-description = "Python toolkit for ITM 4150: Advanced Business Analytics and Visualization"
+description = "Python toolkit for Cedarville University students studying Business Analytics"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
+keywords = ["analytics", "machine-learning", "education", "data-science", "business-analytics"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Intended Audience :: Education",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
 ]
 dependencies = [
     "numpy>=1.20.0",
@@ -28,14 +33,28 @@ dependencies = [
     "scipy>=1.7.0",
     "requests>=2.25.0",
     "scikit-learn>=1.0.0",
+    "openpyxl>=3.0.0",  
+    "patsy>=0.5.0",     
+
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/jdelano/itm4150"
+Homepage = "https://github.com/jdelano/cuanalytics"
+Documentation = "https://github.com/jdelano/cuanalytics#readme"
+Repository = "https://github.com/jdelano/cuanalytics"
+Issues = "https://github.com/jdelano/cuanalytics/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["itm4150*"]
+include = ["cuanalytics*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -49,7 +68,7 @@ addopts = [
 ]
 
 [tool.coverage.run]
-source = ["itm4150"]
+source = ["cuanalytics"]
 omit = ["*/tests/*"]
 
 [tool.coverage.report]

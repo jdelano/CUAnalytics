@@ -16,26 +16,15 @@ def calculate_entropy(y):
     return entropy
 
 def information_gain(df, feature, target_col='class'):
-    """
-    Calculate information gain in a dataframe splitting on a feature.
-    
-    Parameters:
-    parent: array-like, the parent dataset (target values)
-    feature: attribute to split on
-    target_col: name of the target/class column
-    
-    Returns:
-    float: information gain based on splitting the data on the feature
-    """
+    """Calculate information gain from splitting on a feature."""
     n = len(df)
     parent_entropy = calculate_entropy(df[target_col])
     
     # Calculate weighted average of children entropies
     weighted_child_entropy = 0
-    children_list = [df[df[feature] == val][target_col] for val in df[feature].unique()]
-    for child in children_list:
-        if len(child) > 0:  # Skip empty children
-            weight = len(child) / n
-            weighted_child_entropy += weight * calculate_entropy(child)
+    for val in df[feature].unique():
+        child = df[df[feature] == val][target_col]
+        weight = len(child) / n
+        weighted_child_entropy += weight * calculate_entropy(child)
     
     return parent_entropy - weighted_child_entropy
