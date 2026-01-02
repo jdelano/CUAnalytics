@@ -77,12 +77,12 @@ class TestLinearRegressionBasic:
         train, test = split_data(simple_data, test_size=0.2)
         model = fit_lm(train, formula='y ~ .')
         
-        train_r2 = model.score(train)
-        test_r2 = model.score(test)
+        train_report = model.score(train)
+        test_report = model.score(test)
         
-        assert 0 <= train_r2 <= 1
-        assert 0 <= test_r2 <= 1
-        assert train_r2 > 0.9  # Should fit well for this simple linear relationship
+        assert 0 <= train_report['r2'] <= 1
+        assert 0 <= test_report['r2'] <= 1
+        assert train_report['r2'] > 0.9  # Should fit well for this simple linear relationship
     
     def test_get_metrics(self, simple_data):
         """Test getting multiple metrics."""
@@ -438,11 +438,11 @@ class TestLinearRegressionRealData:
         model = fit_lm(train, formula='price_per_unit ~ .')
         
         # Should fit reasonably well
-        train_r2 = model.score(train)
-        test_r2 = model.score(test)
+        train_report = model.score(train)
+        test_report = model.score(test)
         
-        assert train_r2 > 0.5  # Adjusted expectation
-        assert test_r2 > 0.4   # Adjusted expectation
+        assert train_report['r2'] > 0.5  # Adjusted expectation
+        assert test_report['r2'] > 0.4   # Adjusted expectation
     
     def test_real_estate_feature_subset(self, real_estate_data):  # Changed
         """Test model with feature subset."""
@@ -451,7 +451,7 @@ class TestLinearRegressionRealData:
         model = fit_lm(real_estate_data, formula=formula)
         
         assert set(model.feature_names) == set(features)
-        assert model.score(real_estate_data) > 0.3  # Should still fit reasonably
+        assert model.score(real_estate_data)['r2'] > 0.3  # Should still fit reasonably
     
     def test_real_estate_with_interaction(self, real_estate_data):
         """Test model with interaction term."""
@@ -465,8 +465,8 @@ class TestLinearRegressionRealData:
         assert 'house_age:num_convenience_stores' in model.feature_names
         
         # Should predict reasonably
-        test_r2 = model.score(test)
-        assert 0.3 < test_r2 < 1.0  # Reasonable range
+        test_report = model.score(test)
+        assert 0.3 < test_report['r2'] < 1.0  # Reasonable range
 
 
 class TestLinearRegressionEdgeCases:
@@ -482,7 +482,7 @@ class TestLinearRegressionEdgeCases:
         model = fit_lm(df, formula='y ~ .')
         
         assert len(model.feature_names) == 1
-        assert model.score(df) > 0.99  # Perfect linear relationship
+        assert model.score(df)['r2'] > 0.99  # Perfect linear relationship
     
     def test_perfect_correlation(self):
         """Test with perfect linear correlation."""
@@ -494,7 +494,7 @@ class TestLinearRegressionEdgeCases:
         model = fit_lm(df, formula='y ~ .')
         
         # Should have R² very close to 1
-        assert model.score(df) > 0.999
+        assert model.score(df)['r2'] > 0.999
         
         # Coefficient should be very close to 2
         coef = model.get_coefficients()['coefficient'].values[0]
@@ -515,7 +515,7 @@ class TestLinearRegressionEdgeCases:
         model = fit_lm(df, formula='y ~ .')
         
         assert len(model.feature_names) == n_features
-        assert model.score(df) > 0.9
+        assert model.score(df)['r2'] > 0.9
     
     def test_negative_coefficients(self):
         """Test with negative relationships."""

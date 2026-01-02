@@ -525,8 +525,7 @@ class LDAModel:
         
         Returns:
         --------
-        summary_dict : dict
-            Dictionary with model information and training metrics
+        None
         
         Examples:
         ---------

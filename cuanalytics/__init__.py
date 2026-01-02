@@ -15,6 +15,7 @@ from cuanalytics.trees.decision_tree import fit_tree, SimpleDecisionTree
 from cuanalytics.lda.discriminant import fit_lda, LDAModel
 from cuanalytics.svm import fit_svm, SVMModel
 from cuanalytics.regression.linear import fit_lm, LinearRegressionModel
+from cuanalytics.regression.logistic import fit_logit, LogisticRegressionModel
 
 # Define what gets imported with "from cuanalytics import *"
 __all__ = [
@@ -34,4 +35,6 @@ __all__ = [
     'SVMModel',
     'fit_lm',
     'LinearRegressionModel',
+    'fit_logit',
+    'LogisticRegressionModel',
 ]

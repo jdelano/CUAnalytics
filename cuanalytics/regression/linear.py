@@ -186,30 +186,24 @@ class LinearRegressionModel:
     
     def score(self, df):
         """
-        Calculate R² score on a dataset.
-        
-        R² (coefficient of determination) measures how well the model
-        explains the variance in the target variable.
-        - R² = 1.0: Perfect predictions
-        - R² = 0.0: Model is no better than predicting the mean
-        - R² < 0.0: Model is worse than predicting the mean
-        
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            Data with true target values
+        Calculate regression metrics on a dataset.
         
         Returns:
         --------
-        r2 : float
-            R² score
+        metrics : dict
+            Dictionary with R², RMSE, and MAE
         """
         self._check_fitted()
         
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]
-        
-        return self.model.score(X, y_true)
+        y_pred = self.model.predict(X)
+
+        return {
+            'r2': r2_score(y_true, y_pred),
+            'rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
+            'mae': mean_absolute_error(y_true, y_pred),
+        }
     
     def get_metrics(self):
         """

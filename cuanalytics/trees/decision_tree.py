@@ -675,7 +675,7 @@ def fit_tree(df, max_depth=None, criterion='entropy', formula=None):
     ---------
     >>> from cuanalytics import load_mushroom_data, fit_tree, split_data
     >>> df = load_mushroom_data()
-    >>> train, test = split_data(df, target='class', test_size=0.2)
+    >>> train, test = split_data(df, test_size=0.2)
     >>> tree = fit_tree(train, formula='class ~ .', max_depth=3)
     >>> tree.visualize()
     >>> tree.visualize_features('odor', 'spore-print-color')

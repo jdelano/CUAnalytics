@@ -29,7 +29,7 @@ from cuanalytics import load_sales_data, fit_lm, split_data
 df = load_sales_data()
 
 # Split into train/test
-train, test = split_data(df, target='monthly_sales', test_size=0.2)
+train, test = split_data(df, test_size=0.2)
 
 # Fit a linear regression model
 model = fit_lm(train, formula='monthly_sales ~ .')
@@ -42,8 +42,8 @@ model.visualize()
 model.visualize_all_features()
 
 # Evaluate on test set
-test_accuracy = model.score(test)['accuracy']
-print(f"Test R²: {test_accuracy:.4f}")
+test_r2 = model.score(test)['r2']
+print(f"Test R²: {test_r2:.4f}")
 ```
 
 ## 📚 Modules
@@ -57,7 +57,7 @@ from cuanalytics import fit_tree, load_mushroom_data
 
 # Load data
 df = load_mushroom_data()
-train, test = split_data(df, target='class', test_size=0.2)
+train, test = split_data(df, test_size=0.2)
 
 # Build decision tree
 tree = fit_tree(train, formula='class ~ .', max_depth=3, criterion='entropy')
@@ -88,7 +88,7 @@ from cuanalytics import fit_lda, load_iris_data
 
 # Load data
 df = load_iris_data()
-train, test = split_data(df, target='species', test_size=0.2)
+train, test = split_data(df, test_size=0.2)
 
 # Fit LDA model
 lda = fit_lda(train, formula='species ~ .')
@@ -119,7 +119,7 @@ from cuanalytics import fit_svm, load_breast_cancer_data
 
 # Load data
 df = load_breast_cancer_data()
-train, test = split_data(df, target='diagnosis', test_size=0.2)
+train, test = split_data(df, test_size=0.2)
 
 # Fit SVM (C parameter controls margin strictness)
 svm = fit_svm(train, formula='diagnosis ~ .', C=1.0)
@@ -149,7 +149,7 @@ from cuanalytics import fit_lm, load_real_estate_data
 
 # Load data
 df = load_real_estate_data()
-train, test = split_data(df, target='price_per_unit', test_size=0.2)
+train, test = split_data(df, test_size=0.2)
 
 # Method 1: Use all features
 model = fit_lm(train, formula='price_per_unit ~ .')
@@ -171,12 +171,40 @@ model.visualize_feature('house_age')  # Single feature relationship
 model.visualize_all_features()  # Grid of all features
 
 # Get metrics
-metrics = model.get_metrics(test)
-# Returns: {'R2': ..., 'RMSE': ..., 'MAE': ...}
+metrics = model.get_metrics()
+# Returns: {'metrics': {'r2': ..., 'rmse': ..., 'mae': ...}, ...}
 
 # Predictions
 predictions = model.predict(test)
 ```
+
+### 🧭 Logistic Regression
+
+Logistic regression for binary and multiclass classification.
+
+```python
+from cuanalytics import fit_logit, load_breast_cancer_data
+
+# Load data
+df = load_breast_cancer_data()
+train, test = split_data(df, test_size=0.2)
+
+# Fit logistic regression
+logit = fit_logit(train, formula='diagnosis ~ .', C=1.0, penalty='l2', solver='lbfgs')
+
+# Summary and visualization
+logit.summary()
+logit.visualize()
+logit.visualize_features('radius_mean', 'texture_mean')
+
+# Evaluate
+test_report = logit.score(test)
+print(f"Accuracy: {test_report['accuracy']:.2%}")
+```
+
+Penalty and solver notes:
+- `penalty`: regularization type. `l2` shrinks coefficients smoothly; `l1` can drop features; `elasticnet` mixes both.
+- `solver`: optimization algorithm. `lbfgs` is a solid default; `liblinear` works well for small/binary data; `saga` supports `l1`/`elasticnet` and large datasets.
 
 #### Formula Syntax
 
@@ -249,11 +277,14 @@ print(df.shape)
 ```python
 from cuanalytics import split_data
 
-# Train/test split with optional stratification
-train, test = split_data(df, target='species', test_size=0.2, random_state=42)
+# Train/test split with optional random seed
+train, test = split_data(df, test_size=0.2, random_state=42)
 
-# Stratified split (default for classification)
-train, test = split_data(df, target='class', test_size=0.3, stratify=True)
+# Stratified split (useful for categorical targets)
+train, test = split_data(df, test_size=0.3, stratify_on='class')
+
+# Train/validation/test split
+train, val, test = split_data(df, test_size=0.2, val_size=0.1, random_state=42)
 ```
 
 ## 🎓 Educational Focus
@@ -282,7 +313,7 @@ predictions = model.predict(test_data)
 
 # Evaluate performance
 score_report = model.score(test_data)
-accuracy = score_report['accuracy'] if isinstance(score_report, dict) else score_report
+accuracy = score_report['accuracy']
 
 # View detailed summary
 model.summary()
@@ -329,6 +360,6 @@ jdelano@cedarville.edu
 
 ## 🔗 Links
 
-- [GitHub Repository](https://github.com/jdelano/cuanalytics)
+- [GitHub Repository](https://github.com/jdelano/CUAnalytics)
 - [PyPI Package](https://pypi.org/project/cuanalytics/)
 - [Report Issues](https://github.com/jdelano/cuanalytics/issues)

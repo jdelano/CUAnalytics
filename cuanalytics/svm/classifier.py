@@ -676,7 +676,7 @@ def fit_svm(df, C=1.0, formula=None):
     >>> from cuanalytics import fit_svm, split_data, load_iris_data
     >>> df = load_iris_data()
     >>> df_binary = df[df['species'].isin(['Iris-setosa', 'Iris-versicolor'])]
-    >>> train, test = split_data(df_binary, target='species', test_size=0.2)
+    >>> train, test = split_data(df_binary, test_size=0.2)
     >>> svm = fit_svm(train, formula='species ~ .', C=1.0)
     >>> svm.summary()
     >>> train_acc = svm.score(train)['accuracy']

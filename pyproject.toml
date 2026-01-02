@@ -47,10 +47,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jdelano/cuanalytics"
-Documentation = "https://github.com/jdelano/cuanalytics#readme"
-Repository = "https://github.com/jdelano/cuanalytics"
-Issues = "https://github.com/jdelano/cuanalytics/issues"
+Homepage = "https://github.com/jdelano/CUAnalytics"
+Documentation = "https://github.com/jdelano/CUAnalytics#readme"
+Repository = "https://github.com/jdelano/CUAnalytics"
+Issues = "https://github.com/jdelano/CUAnalytics/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
