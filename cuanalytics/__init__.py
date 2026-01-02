@@ -10,12 +10,14 @@ __author__ = "Dr. John D. Delano"
 from cuanalytics.datasets.loaders import load_mushroom_data, load_iris_data, load_breast_cancer_data, load_real_estate_data
 from cuanalytics.entropy.metrics import calculate_entropy, information_gain
 from cuanalytics.entropy.visualization import plot_entropy
-from cuanalytics.preprocessing.split import split_data 
+from cuanalytics.preprocessing.split import split_data
+from cuanalytics.preprocessing.scale import scale_data
 from cuanalytics.trees.decision_tree import fit_tree, SimpleDecisionTree
 from cuanalytics.lda.discriminant import fit_lda, LDAModel
 from cuanalytics.svm import fit_svm, SVMModel
 from cuanalytics.regression.linear import fit_lm, LinearRegressionModel
 from cuanalytics.regression.logistic import fit_logit, LogisticRegressionModel
+from cuanalytics.neuralnet import fit_nn, NeuralNetModel
 
 # Define what gets imported with "from cuanalytics import *"
 __all__ = [
@@ -27,6 +29,7 @@ __all__ = [
     'information_gain',
     'plot_entropy',
     'split_data',
+    'scale_data',
     'fit_tree',
     'SimpleDecisionTree',
     'fit_lda',
@@ -37,4 +40,6 @@ __all__ = [
     'LinearRegressionModel',
     'fit_logit',
     'LogisticRegressionModel',
+    'fit_nn',
+    'NeuralNetModel',
 ]

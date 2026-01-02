@@ -193,6 +193,8 @@ def test_visualize_features_invalid_feature(binary_data):
         model.visualize_features('x1', 'missing')
 
 
+@pytest.mark.filterwarnings("ignore:.*penalty.*:FutureWarning")
+@pytest.mark.filterwarnings("ignore:.*penalty.*:UserWarning")
 def test_visualize_features_penalty_non_default(binary_data, monkeypatch):
     model = fit_logit(binary_data, formula='class ~ x1 + x2', penalty='l1', solver='liblinear')
     monkeypatch.setattr('matplotlib.pyplot.show', lambda: None)

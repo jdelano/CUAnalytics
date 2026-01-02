@@ -206,6 +206,32 @@ Penalty and solver notes:
 - `penalty`: regularization type. `l2` shrinks coefficients smoothly; `l1` can drop features; `elasticnet` mixes both.
 - `solver`: optimization algorithm. `lbfgs` is a solid default; `liblinear` works well for small/binary data; `saga` supports `l1`/`elasticnet` and large datasets.
 
+### 🧠 Neural Networks
+
+Feedforward neural networks for classification or regression using scikit-learn MLP.
+
+```python
+from cuanalytics import fit_nn, load_breast_cancer_data, scale_data
+
+df = load_breast_cancer_data()
+train, test = split_data(df, test_size=0.2, random_state=42)
+train, scaler = scale_data(train, exclude_cols=['diagnosis'])
+test, _ = scale_data(test, exclude_cols=['diagnosis'], scaler=scaler)
+
+nn = fit_nn(
+    train,
+    formula='diagnosis ~ .',
+    hidden_layers=[3, 5, 2],
+    max_iter=1000
+)
+
+nn.summary()
+nn.visualize()
+
+report = nn.score(test)
+print(f"Accuracy: {report['accuracy']:.2%}")
+```
+
 #### Formula Syntax
 
 ```python
@@ -275,7 +301,7 @@ print(df.shape)
 ### 🛠️ Utilities
 
 ```python
-from cuanalytics import split_data
+from cuanalytics import split_data, scale_data
 
 # Train/test split with optional random seed
 train, test = split_data(df, test_size=0.2, random_state=42)
@@ -285,6 +311,14 @@ train, test = split_data(df, test_size=0.3, stratify_on='class')
 
 # Train/validation/test split
 train, val, test = split_data(df, test_size=0.2, val_size=0.1, random_state=42)
+
+# Scale numeric features (fit on train, apply to test)
+# By default, binary (0/1) columns are left unchanged.
+train_scaled, scaler = scale_data(train, exclude_cols=['class'])
+test_scaled, _ = scale_data(test, exclude_cols=['class'], scaler=scaler)
+
+# Scale binary columns too (if desired)
+train_scaled, scaler = scale_data(train, exclude_cols=['class'], skip_binary=False)
 ```
 
 ## 🎓 Educational Focus
