@@ -3,7 +3,7 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
