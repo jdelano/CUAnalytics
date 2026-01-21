@@ -18,6 +18,9 @@ from cuanalytics.svm import fit_svm, SVMModel
 from cuanalytics.regression.linear import fit_lm, LinearRegressionModel
 from cuanalytics.regression.logistic import fit_logit, LogisticRegressionModel
 from cuanalytics.neuralnet import fit_nn, NeuralNetModel
+from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
+from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
+from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel
 
 # Define what gets imported with "from cuanalytics import *"
 __all__ = [
@@ -42,4 +45,16 @@ __all__ = [
     'LogisticRegressionModel',
     'fit_nn',
     'NeuralNetModel',
+    'euclidean',
+    'manhattan',
+    'cosine',
+    'jaccard',
+    'fit_knn_classifier',
+    'KNNClassifierModel',
+    'fit_knn_regressor',
+    'KNNRegressorModel',
+    'fit_kmeans',
+    'KMeansModel',
+    'fit_hierarchical',
+    'HierarchicalClusteringModel',
 ]

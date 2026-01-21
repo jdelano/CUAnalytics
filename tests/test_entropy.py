@@ -67,6 +67,24 @@ class TestCalculateEntropy:
         empty_series = pd.Series([], dtype=str)
         assert calculate_entropy(empty_series) == 0.0
 
+    def test_calculate_entropy_dataframe_target(self):
+        """Entropy should work with DataFrame + target_col"""
+        df = pd.DataFrame({
+            'feature': ['X', 'X', 'Y', 'Y'],
+            'class': ['A', 'A', 'B', 'B']
+        })
+        entropy = calculate_entropy(df, target_col='class')
+        assert abs(entropy - 1.0) < 0.0001
+
+    def test_calculate_entropy_dataframe_split(self):
+        """Weighted entropy should work with DataFrame + split_col"""
+        df = pd.DataFrame({
+            'feature': ['X', 'X', 'Y', 'Y'],
+            'class': ['A', 'A', 'B', 'B']
+        })
+        entropy = calculate_entropy(df, target_col='class', split_col='feature')
+        assert abs(entropy - 0.0) < 0.0001
+
 
 class TestInformationGain:
     """Tests for information_gain function"""

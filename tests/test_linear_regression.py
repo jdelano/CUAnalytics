@@ -6,6 +6,7 @@ Test suite for linear regression module.
 import pytest
 import pandas as pd
 import numpy as np
+from types import SimpleNamespace
 from cuanalytics import fit_lm, LinearRegressionModel, split_data
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for testing
@@ -44,7 +45,7 @@ class TestLinearRegressionBasic:
         assert isinstance(model, LinearRegressionModel)
         assert model.target == 'y'
         assert set(model.feature_names) == {'x1', 'x2'}
-        assert len(model.df) == 100
+        assert len(model.model_formula.X) == 100
     
     def test_model_creation_feature_subset(self, simple_data):
         """Test creating model with feature subset."""
@@ -312,7 +313,7 @@ class TestLinearRegressionValidation:
         """Test error when formula is missing a target."""
         df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
         
-        with pytest.raises(ValueError, match="Formula must include a target"):
+        with pytest.raises(Exception, match="Missing operator between `y` and `x`"):
             fit_lm(df, formula='y x')
     
     def test_non_numeric_target_error(self):
@@ -557,7 +558,7 @@ class TestLinearRegressionEdgeCasesAndErrors:
             'y': [7, 8, 9]
         })
         
-        with pytest.raises(ValueError, match="Formula must include a target"):
+        with pytest.raises(Exception, match="Missing operator between `y` and `x1`"):
             fit_lm(df, formula='y x1 y')
     
     def test_singular_matrix_in_summary(self):
@@ -795,10 +796,12 @@ class TestLinearRegressionCheckFitted:
         # We can test this indirectly by mocking
         model = LinearRegressionModel.__new__(LinearRegressionModel)
         model.df = df
-        model.target = 'y'
-        model.feature_names = ['x']
-        model.X = df[['x']]
-        model.y = df['y']
+        model.model_formula = SimpleNamespace(
+            target='y',
+            model_spec=None,
+            X=df[['x']],
+            y=df['y']
+        )
         model.formula = None
         # Don't set model.model - this makes it "unfitted"
         

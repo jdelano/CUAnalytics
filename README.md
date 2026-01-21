@@ -279,6 +279,71 @@ print(f"Information gain: {ig:.4f}")
 plot_entropy_rectangles(df, feature='odor', target='class')
 ```
 
+### 📐 Similarity & Distance
+
+```python
+from cuanalytics import euclidean, manhattan, cosine, jaccard
+
+euclidean([1, 2], [4, 6])
+manhattan([1, 2], [4, 6])
+cosine([1, 0], [0, 1])
+jaccard([1, 0, 1], [1, 1, 0])
+```
+
+### 🤝 k-Nearest Neighbors (KNN)
+
+Classification:
+
+```python
+from cuanalytics import fit_knn_classifier, load_breast_cancer_data
+
+df = load_breast_cancer_data()
+train, test = split_data(df, test_size=0.2, random_state=42)
+
+knn = fit_knn_classifier(train, formula='diagnosis ~ .', k=5)
+knn.summary()
+
+report = knn.score(test)
+print(f"Accuracy: {report['accuracy']:.2%}")
+```
+
+Regression:
+
+```python
+from cuanalytics import fit_knn_regressor, load_real_estate_data
+
+df = load_real_estate_data()
+train, test = split_data(df, test_size=0.2, random_state=42)
+
+knn = fit_knn_regressor(train, formula='price_per_unit ~ .', k=5)
+metrics = knn.score(test)
+print(f"Test R²: {metrics['r2']:.4f}")
+```
+
+### 🧩 Clustering
+
+K-Means:
+
+```python
+from cuanalytics import fit_kmeans, load_iris_data
+
+df = load_iris_data()
+kmeans = fit_kmeans(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
+kmeans.summary()
+kmeans.visualize()
+```
+
+Hierarchical:
+
+```python
+from cuanalytics import fit_hierarchical, load_iris_data
+
+df = load_iris_data()
+hier = fit_hierarchical(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
+hier.summary()
+hier.visualize()
+```
+
 ### 📊 Dataset Loaders
 
 Built-in datasets for practice and examples.

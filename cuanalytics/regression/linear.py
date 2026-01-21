@@ -6,9 +6,9 @@ Linear regression implementation for ITM 4150.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import re
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from cuanalytics.formula import ModelFormula
 
 class LinearRegressionModel:
     """
@@ -28,88 +28,11 @@ class LinearRegressionModel:
     def __init__(self, df, formula):
         self.original_df = df  # Keep original for reference
         self.formula = formula
-        self.model_spec = None  # For formula transformations
 
-        if formula is None:
-            raise ValueError("Must provide 'formula' for model specification")
+        self.model_formula = ModelFormula(df, formula, drop_intercept=True)
+        self.model_formula.validate_regression_target(df)
 
-        # Use formulaic to parse formula and create transformed dataframe
-        try:
-            from formulaic import model_matrix
-        except ImportError:
-            raise ImportError(
-                "Formula support requires the 'formulaic' library.\n"
-                "Install it with: pip install formulaic"
-            )
-
-        if '~' not in formula:
-            raise ValueError("Formula must include a target (e.g., 'y ~ x1 + x2').")
-
-        lhs = formula.split('~', 1)[0].strip()
-        if lhs and lhs not in df.columns and lhs.isidentifier():
-            raise ValueError(f"Target '{lhs}' not found in data")
-        if lhs in df.columns and not pd.api.types.is_numeric_dtype(df[lhs]):
-            raise ValueError(
-                f"Target variable '{lhs}' must be numeric for regression.\n"
-                f"Found type: {df[lhs].dtype}"
-            )
-
-        model_matrices = model_matrix(formula, df, output='pandas')
-
-        if hasattr(model_matrices, 'lhs') and hasattr(model_matrices, 'rhs'):
-            y = model_matrices.lhs
-            X = model_matrices.rhs
-        elif isinstance(model_matrices, tuple) and len(model_matrices) == 2:
-            y, X = model_matrices
-        else:
-            raise RuntimeError("Unexpected formulaic output when building design matrices.")
-
-        self.model_spec = getattr(model_matrices, 'model_spec', None)
-
-        if isinstance(y, pd.Series):
-            y = y.to_frame()
-
-        # Extract target name
-        self.target = y.columns[0]
-
-        # Remove intercept (sklearn adds its own)
-        if 'Intercept' in X.columns:
-            X = X.drop('Intercept', axis=1)
-
-        # Create working dataframe with target + transformed features
-        self.df = X.copy()
-        self.df[self.target] = y.iloc[:, 0]
-
-        # Feature names are the transformed column names
-        self.feature_names = list(X.columns)
-        
-        # Now extract X and y from the working dataframe
-        self.X = self.df[self.feature_names]
-        self.y = self.df[self.target]
-        
-        # Check if source features are numeric (unless explicitly encoded)
-        used_vars = set()
-        if self.model_spec is not None:
-            rhs_spec = getattr(self.model_spec, 'rhs', self.model_spec)
-            used_vars = {var for var in getattr(rhs_spec, 'variables', set())
-                         if var in df.columns and var != self.target}
-        if not used_vars:
-            used_vars = {col for col in df.columns if col != self.target}
-        non_numeric = [col for col in used_vars
-                       if not pd.api.types.is_numeric_dtype(df[col])]
-        if non_numeric:
-            allowed = set()
-            for col in non_numeric:
-                pattern = r'(?<![\w.])C\(\s*' + re.escape(col) + r'(\s*[,)])'
-                if re.search(pattern, formula):
-                    allowed.add(col)
-            non_numeric = [col for col in non_numeric if col not in allowed]
-        if non_numeric:
-            raise ValueError(
-                f"All features must be numeric. Non-numeric features found: {non_numeric}\n"
-                "Hint: Use pd.get_dummies() to convert categorical features,\n"
-                "      or use formula syntax with C() for categorical variables."
-            )
+        self.model_formula.validate_numeric_features(df)
 
         # Create and fit model
         try:
@@ -122,7 +45,7 @@ class LinearRegressionModel:
     def _fit(self):
         """Fit the linear regression model."""
         self.model = LinearRegression()
-        self.model.fit(self.X, self.y)
+        self.model.fit(self.model_formula.X, self.model_formula.y)
         
     def _check_fitted(self):
         """Check if the model has been fitted."""
@@ -146,22 +69,26 @@ class LinearRegressionModel:
         X : pd.DataFrame
             Transformed feature matrix (without intercept)
         """
-        if getattr(self, 'model_spec', None) is None:
+        if getattr(self, 'model_formula', None) is None or self.model_formula.model_spec is None:
             raise RuntimeError("Formula metadata missing; cannot transform new data.")
 
-        rhs_spec = getattr(self.model_spec, 'rhs', self.model_spec)
-        model_matrices = rhs_spec.get_model_matrix(df, output='pandas')
+        return self.model_formula.transform(df)
 
-        if hasattr(model_matrices, 'rhs'):
-            X_new = model_matrices.rhs
-        else:
-            X_new = model_matrices
-        
-        # Remove intercept if present
-        if 'Intercept' in X_new.columns:
-            X_new = X_new.drop('Intercept', axis=1)
-        
-        return X_new
+    @property
+    def model_spec(self):
+        return self.model_formula.model_spec
+
+    @model_spec.setter
+    def model_spec(self, value):
+        self.model_formula.model_spec = value
+
+    @property
+    def target(self):
+        return self.model_formula.target
+
+    @property
+    def feature_names(self):
+        return list(self.model_formula.X.columns)
 
     def predict(self, df):
         """
@@ -218,18 +145,18 @@ class LinearRegressionModel:
 
         from scipy import stats
 
-        y_pred = self.model.predict(self.X)
-        residuals = self.y - y_pred
-        n = len(self.y)
+        y_pred = self.model.predict(self.model_formula.X)
+        residuals = self.model_formula.y - y_pred
+        n = len(self.model_formula.y)
         k = len(self.feature_names)
 
-        r2 = r2_score(self.y, y_pred)
+        r2 = r2_score(self.model_formula.y, y_pred)
         adj_r2 = 1 - (1 - r2) * (n - 1) / (n - k - 1)
-        rmse = np.sqrt(mean_squared_error(self.y, y_pred))
-        mae = mean_absolute_error(self.y, y_pred)
+        rmse = np.sqrt(mean_squared_error(self.model_formula.y, y_pred))
+        mae = mean_absolute_error(self.model_formula.y, y_pred)
 
         rse = np.sqrt(np.sum(residuals**2) / (n - k - 1))
-        X_with_intercept = np.column_stack([np.ones(n), self.X])
+        X_with_intercept = np.column_stack([np.ones(n), self.model_formula.X])
         try:
             var_covar = rse**2 * np.linalg.inv(X_with_intercept.T @ X_with_intercept)
             std_errors = np.sqrt(np.diag(var_covar))
@@ -244,8 +171,8 @@ class LinearRegressionModel:
         conf_lower = all_coefs - t_critical * std_errors
         conf_upper = all_coefs + t_critical * std_errors
 
-        ss_total = np.sum((self.y - self.y.mean())**2)
-        ss_regression = np.sum((y_pred - self.y.mean())**2)
+        ss_total = np.sum((self.model_formula.y - self.model_formula.y.mean())**2)
+        ss_regression = np.sum((y_pred - self.model_formula.y.mean())**2)
         ss_residual = np.sum(residuals**2)
 
         ms_regression = ss_regression / k
@@ -361,17 +288,17 @@ class LinearRegressionModel:
         self._check_fitted()
         
         # Use the already-transformed X and y
-        y_pred = self.model.predict(self.X)
-        residuals = self.y - y_pred
+        y_pred = self.model.predict(self.model_formula.X)
+        residuals = self.model_formula.y - y_pred
         
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
         
         # Plot 1: Predicted vs Actual
-        ax1.scatter(self.y, y_pred, alpha=0.6, edgecolors='black', s=50)
+        ax1.scatter(self.model_formula.y, y_pred, alpha=0.6, edgecolors='black', s=50)
         
         # Add perfect prediction line
-        min_val = min(self.y.min(), y_pred.min())
-        max_val = max(self.y.max(), y_pred.max())
+        min_val = min(self.model_formula.y.min(), y_pred.min())
+        max_val = max(self.model_formula.y.max(), y_pred.max())
         ax1.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Perfect prediction')
         
         ax1.set_xlabel('Actual Values', fontsize=12, fontweight='bold')
@@ -444,7 +371,7 @@ class LinearRegressionModel:
             )
         
         # Create range of values for the selected feature
-        feature_values = np.linspace(self.X[feature].min(), self.X[feature].max(), 100)
+        feature_values = np.linspace(self.model_formula.X[feature].min(), self.model_formula.X[feature].max(), 100)
         
         # Create prediction DataFrame with other features at mean
         X_pred = pd.DataFrame(index=range(100))
@@ -453,10 +380,10 @@ class LinearRegressionModel:
             if feat == feature:
                 X_pred[feat] = feature_values
             else:
-                mean_val = self.X[feat].mean()
+                mean_val = self.model_formula.X[feat].mean()
                 # Check for NaN (shouldn't happen with valid data, but just in case)
                 if pd.isna(mean_val):
-                    mean_val = self.X[feat].median()  # Fall back to median
+                    mean_val = self.model_formula.X[feat].median()  # Fall back to median
                 X_pred[feat] = mean_val
         
         # Predict using the DataFrame
@@ -466,7 +393,7 @@ class LinearRegressionModel:
         fig, ax = plt.subplots(figsize=figsize)
         
         # Actual data points
-        ax.scatter(self.X[feature], self.y, alpha=0.6, s=50, 
+        ax.scatter(self.model_formula.X[feature], self.model_formula.y, alpha=0.6, s=50, 
                 edgecolors='black', label='Actual data')
         
         # Regression line (holding other features at mean)
@@ -537,17 +464,17 @@ class LinearRegressionModel:
             ax = axes[i]
             
             # Scatter plot
-            ax.scatter(self.X[feature], self.y, alpha=0.6, s=30, 
+            ax.scatter(self.model_formula.X[feature], self.model_formula.y, alpha=0.6, s=30, 
                     edgecolors='black', linewidth=0.5)
             
             # Add trend line
-            z = np.polyfit(self.X[feature], self.y, 1)
+            z = np.polyfit(self.model_formula.X[feature], self.model_formula.y, 1)
             p = np.poly1d(z)
-            x_line = np.linspace(self.X[feature].min(), self.X[feature].max(), 100)
+            x_line = np.linspace(self.model_formula.X[feature].min(), self.model_formula.X[feature].max(), 100)
             ax.plot(x_line, p(x_line), "r--", alpha=0.8, linewidth=2)
             
             # Calculate and display correlation
-            corr = self.X[feature].corr(self.y)
+            corr = self.model_formula.X[feature].corr(self.model_formula.y)
             
             ax.set_xlabel(feature, fontsize=10, fontweight='bold')
             ax.set_ylabel(self.target, fontsize=10, fontweight='bold')
@@ -568,7 +495,7 @@ class LinearRegressionModel:
         print("-" * 50)
         correlations = []
         for feature in self.feature_names:
-            corr = self.X[feature].corr(self.y)
+            corr = self.model_formula.X[feature].corr(self.model_formula.y)
             correlations.append({'feature': feature, 'correlation': corr})
         
         corr_df = pd.DataFrame(correlations).sort_values('correlation', 
@@ -602,23 +529,23 @@ class LinearRegressionModel:
         from scipy import stats
         
         # Calculate metrics
-        y_pred = self.model.predict(self.X)
-        residuals = self.y - y_pred
-        n = len(self.y)
+        y_pred = self.model.predict(self.model_formula.X)
+        residuals = self.model_formula.y - y_pred
+        n = len(self.model_formula.y)
         k = len(self.feature_names)  # Number of predictors
         
         # Calculate R², adjusted R², RMSE, MAE
-        r2 = r2_score(self.y, y_pred)
+        r2 = r2_score(self.model_formula.y, y_pred)
         adj_r2 = 1 - (1 - r2) * (n - 1) / (n - k - 1)
-        rmse = np.sqrt(mean_squared_error(self.y, y_pred))
-        mae = mean_absolute_error(self.y, y_pred)
+        rmse = np.sqrt(mean_squared_error(self.model_formula.y, y_pred))
+        mae = mean_absolute_error(self.model_formula.y, y_pred)
         
         # Calculate standard errors and t-statistics
         # Residual standard error
         rse = np.sqrt(np.sum(residuals**2) / (n - k - 1))
         
         # Variance-covariance matrix
-        X_with_intercept = np.column_stack([np.ones(n), self.X])
+        X_with_intercept = np.column_stack([np.ones(n), self.model_formula.X])
         try:
             var_covar = rse**2 * np.linalg.inv(X_with_intercept.T @ X_with_intercept)
             std_errors = np.sqrt(np.diag(var_covar))
@@ -639,8 +566,8 @@ class LinearRegressionModel:
         conf_upper = all_coefs + t_critical * std_errors
         
         # ANOVA table calculations
-        ss_total = np.sum((self.y - self.y.mean())**2)
-        ss_regression = np.sum((y_pred - self.y.mean())**2)
+        ss_total = np.sum((self.model_formula.y - self.model_formula.y.mean())**2)
+        ss_regression = np.sum((y_pred - self.model_formula.y.mean())**2)
         ss_residual = np.sum(residuals**2)
         
         ms_regression = ss_regression / k
