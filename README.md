@@ -270,9 +270,12 @@ from cuanalytics.entropy.visualization import plot_entropy_rectangles
 entropy = calculate_entropy(df['class'])
 print(f"Entropy: {entropy:.4f}")
 
+# Calculate entropy from a DataFrame column
+entropy = calculate_entropy(df, target_col='class')
+print(f"Entropy: {entropy:.4f}")
+
 # Calculate information gain from a split
-children = [df[df['feature'] == val]['class'] for val in df['feature'].unique()]
-ig = information_gain(df['class'], *children)
+ig = information_gain(df, feature='feature', target_col='class')
 print(f"Information gain: {ig:.4f}")
 
 # Visualize entropy with rectangles
