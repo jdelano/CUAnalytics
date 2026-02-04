@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix
+from cuanalytics.formula import allow_categorical_from_formula
 
 class SVMModel:
     """
@@ -57,6 +58,7 @@ class SVMModel:
 
         try:
             from formulaic import model_matrix
+            from formulaic.transforms import C as categorical
         except ImportError:
             raise ImportError(
                 "Formula support requires the 'formulaic' library.\n"
@@ -75,7 +77,10 @@ class SVMModel:
 
         y = df[lhs]
         df_rhs = df.drop(columns=[lhs])
-        model_matrices = model_matrix(rhs, df_rhs, output='pandas')
+        try:
+            model_matrices = model_matrix(rhs, df_rhs, output='pandas', context={"C": categorical})
+        except TypeError:
+            model_matrices = model_matrix(rhs, df_rhs, output='pandas')
 
         if hasattr(model_matrices, 'rhs'):
             X = model_matrices.rhs
@@ -114,10 +119,11 @@ class SVMModel:
             used_vars = set(df_rhs.columns)
         non_numeric = [col for col in used_vars
                        if not pd.api.types.is_numeric_dtype(df_rhs[col])]
+        non_numeric = allow_categorical_from_formula(non_numeric, self.formula)
         if non_numeric:
             raise ValueError(
                 f"All features must be numeric. Non-numeric features found: {non_numeric}\n"
-                "Hint: Use pd.get_dummies() or LabelEncoder to convert categorical features."
+                "Hint: Use pd.get_dummies() or wrap categorical variables with C() in the formula."
             )
         
         # Create and fit SVM

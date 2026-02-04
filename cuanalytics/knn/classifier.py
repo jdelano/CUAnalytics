@@ -8,6 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import confusion_matrix
+from cuanalytics.formula import allow_categorical_from_formula
 
 
 class KNNClassifierModel:
@@ -28,6 +29,7 @@ class KNNClassifierModel:
 
         try:
             from formulaic import model_matrix
+            from formulaic.transforms import C as categorical
         except ImportError:
             raise ImportError(
                 "Formula support requires the 'formulaic' library.\n"
@@ -46,7 +48,10 @@ class KNNClassifierModel:
 
         y = df[lhs]
         df_rhs = df.drop(columns=[lhs])
-        model_matrices = model_matrix(rhs, df_rhs, output='pandas')
+        try:
+            model_matrices = model_matrix(rhs, df_rhs, output='pandas', context={"C": categorical})
+        except TypeError:
+            model_matrices = model_matrix(rhs, df_rhs, output='pandas')
 
         if hasattr(model_matrices, 'rhs'):
             X = model_matrices.rhs
@@ -77,8 +82,12 @@ class KNNClassifierModel:
             used_vars = set(df_rhs.columns)
         non_numeric = [col for col in used_vars
                        if not pd.api.types.is_numeric_dtype(df_rhs[col])]
+        non_numeric = allow_categorical_from_formula(non_numeric, self.formula)
         if non_numeric:
-            raise ValueError("All features must be numeric. Encode categorical variables first.")
+            raise ValueError(
+                "All features must be numeric unless wrapped in C(). "
+                "Encode categorical variables or use C() in the formula."
+            )
 
         self._fit()
         self._print_fit_summary()

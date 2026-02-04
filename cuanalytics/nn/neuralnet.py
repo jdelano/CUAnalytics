@@ -1,4 +1,4 @@
-# cuanalytics/neuralnet.py
+# cuanalytics/nn/neuralnet.py
 """
 Neural network models using scikit-learn MLP.
 """
@@ -8,6 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.metrics import confusion_matrix, mean_squared_error, mean_absolute_error, r2_score
+from cuanalytics.formula import allow_categorical_from_formula
 
 
 class NeuralNetModel:
@@ -60,6 +61,7 @@ class NeuralNetModel:
 
         try:
             from formulaic import model_matrix
+            from formulaic.transforms import C as categorical
         except ImportError:
             raise ImportError(
                 "Formula support requires the 'formulaic' library.\n"
@@ -78,7 +80,10 @@ class NeuralNetModel:
 
         y = df[lhs]
         df_rhs = df.drop(columns=[lhs])
-        model_matrices = model_matrix(rhs, df_rhs, output='pandas')
+        try:
+            model_matrices = model_matrix(rhs, df_rhs, output='pandas', context={"C": categorical})
+        except TypeError:
+            model_matrices = model_matrix(rhs, df_rhs, output='pandas')
 
         if hasattr(model_matrices, 'rhs'):
             X = model_matrices.rhs
@@ -108,8 +113,12 @@ class NeuralNetModel:
             used_vars = set(df_rhs.columns)
         non_numeric = [col for col in used_vars
                        if not pd.api.types.is_numeric_dtype(df_rhs[col])]
+        non_numeric = allow_categorical_from_formula(non_numeric, self.formula)
         if non_numeric:
-            raise ValueError("All features must be numeric. Encode categorical variables first.")
+            raise ValueError(
+                "All features must be numeric unless wrapped in C(). "
+                "Encode categorical variables or use C() in the formula."
+            )
 
         self.task_type = self._infer_task_type(self.y)
         self.classes = sorted(self.y.unique()) if self.task_type == 'classification' else None
@@ -441,6 +450,20 @@ def fit_nn(
         R-style formula
     hidden_layers : list[int] | tuple[int]
         Nodes per hidden layer (e.g., [3, 5, 2])
+    activation : str
+        Hidden-layer activation. One of:
+        - 'identity': Linear (no nonlinearity)
+        - 'logistic': Logistic sigmoid
+        - 'tanh': Hyperbolic tangent
+        - 'relu': Rectified Linear Unit (default)
+    solver : str
+        Optimizer ('adam', 'lbfgs', 'sgd')
+    alpha : float
+        L2 regularization strength
+    max_iter : int
+        Maximum training iterations
+    random_state : int | None
+        Random seed for reproducibility
     """
     if formula is None:
         raise ValueError("Must provide 'formula' for model specification")

@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from cuanalytics import fit_nn
-from cuanalytics.neuralnet import NeuralNetModel
+from cuanalytics.nn.neuralnet import NeuralNetModel
 
 
 @pytest.fixture
@@ -107,6 +107,13 @@ def test_non_numeric_feature_raises(binary_data):
     df['cat'] = ['a', 'b'] * 60
     with pytest.raises(ValueError, match="All features must be numeric"):
         fit_nn(df, formula='class ~ x1 + cat')
+
+
+def test_categorical_feature_with_C_allows_fit(binary_data):
+    df = binary_data.copy()
+    df['cat'] = ['a', 'b'] * 60
+    model = fit_nn(df, formula='class ~ x1 + C(cat)', hidden_layers=[3], solver='lbfgs', max_iter=1000)
+    assert isinstance(model, NeuralNetModel)
 
 
 def test_unfitted_predict_raises(binary_data):

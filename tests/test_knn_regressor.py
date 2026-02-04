@@ -58,6 +58,13 @@ def test_non_numeric_feature_raises(regression_data):
         fit_knn_regressor(df, formula='y ~ x1 + cat')
 
 
+def test_categorical_feature_with_C_allows_fit(regression_data):
+    df = regression_data.copy()
+    df['cat'] = ['a', 'b'] * 60
+    model = fit_knn_regressor(df, formula='y ~ x1 + C(cat)', k=3)
+    assert isinstance(model, KNNRegressorModel)
+
+
 def test_unfitted_predict_raises(regression_data):
     model = KNNRegressorModel.__new__(KNNRegressorModel)
     with pytest.raises(RuntimeError, match="not been fitted"):

@@ -66,6 +66,13 @@ def test_non_numeric_feature_raises(binary_data):
         fit_knn_classifier(df, formula='class ~ x1 + cat')
 
 
+def test_categorical_feature_with_C_allows_fit(binary_data):
+    df = binary_data.copy()
+    df['cat'] = ['a', 'b'] * 60
+    model = fit_knn_classifier(df, formula='class ~ x1 + C(cat)', k=3)
+    assert isinstance(model, KNNClassifierModel)
+
+
 def test_unfitted_predict_raises(binary_data):
     model = KNNClassifierModel.__new__(KNNClassifierModel)
     with pytest.raises(RuntimeError, match="not been fitted"):

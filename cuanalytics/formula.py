@@ -6,6 +6,21 @@ import pandas as pd
 import re
 
 
+def allow_categorical_from_formula(non_numeric, formula):
+    """
+    Remove non-numeric columns that are explicitly wrapped in C() in the formula.
+    """
+    if not non_numeric or not formula:
+        return non_numeric
+
+    allowed = set()
+    for col in non_numeric:
+        pattern = r'(?<![\w.])C\(\s*' + re.escape(col) + r'(\s*[,)])'
+        if re.search(pattern, formula):
+            allowed.add(col)
+    return [col for col in non_numeric if col not in allowed]
+
+
 class ModelFormula:
     """
     Parse and store formula metadata and design matrices.
@@ -21,6 +36,7 @@ class ModelFormula:
 
         try:
             from formulaic import model_matrix
+            from formulaic.transforms import C as categorical
         except ImportError:
             raise ImportError(
                 "Formula support requires the 'formulaic' library.\n"
@@ -33,11 +49,17 @@ class ModelFormula:
             self.rhs = rhs.strip()
             if self.target and self.target not in df.columns and self.target.isidentifier():
                 raise ValueError(f"Target '{self.target}' not found in data")
-            model_matrices = model_matrix(formula, df, output='pandas')
+            try:
+                model_matrices = model_matrix(formula, df, output='pandas', context={"C": categorical})
+            except TypeError:
+                model_matrices = model_matrix(formula, df, output='pandas')
         else:
             self.target = None
             self.rhs = formula.strip()
-            model_matrices = model_matrix(self.rhs, df, output='pandas')
+            try:
+                model_matrices = model_matrix(self.rhs, df, output='pandas', context={"C": categorical})
+            except TypeError:
+                model_matrices = model_matrix(self.rhs, df, output='pandas')
 
         if hasattr(model_matrices, 'lhs') and hasattr(model_matrices, 'rhs'):
             y = model_matrices.lhs

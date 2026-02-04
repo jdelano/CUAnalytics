@@ -320,10 +320,10 @@ class TestDatasetErrorHandling:
         
         monkeypatch.setattr(urllib.request, 'urlopen', mock_urlopen)
         
-        # Should handle the error gracefully
-        # Based on your code, it prints error and returns None
+        # Should handle the error gracefully and return a fallback DataFrame
         result = load_real_estate_data()
-        assert result is None
+        assert isinstance(result, pd.DataFrame)
+        assert not result.empty
 
 
 class TestDatasetIntegration:

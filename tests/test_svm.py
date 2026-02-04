@@ -81,6 +81,13 @@ class TestSVMValidation:
         
         with pytest.raises(ValueError, match="must be numeric"):
             fit_svm(df, formula='class ~ I(categorical)')
+
+    def test_categorical_feature_with_C_allows_fit(self, binary_classification_data):
+        """Test categorical features work when wrapped with C()"""
+        df = binary_classification_data.copy()
+        df['categorical'] = ['cat1', 'cat2'] * 50
+        svm = fit_svm(df, formula='class ~ x1 + C(categorical)')
+        assert isinstance(svm, SVMModel)
     
     def test_unfitted_model_error(self):
         """Test error when using unfitted model"""

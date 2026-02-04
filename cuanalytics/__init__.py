@@ -3,7 +3,7 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
@@ -17,7 +17,7 @@ from cuanalytics.lda.discriminant import fit_lda, LDAModel
 from cuanalytics.svm import fit_svm, SVMModel
 from cuanalytics.regression.linear import fit_lm, LinearRegressionModel
 from cuanalytics.regression.logistic import fit_logit, LogisticRegressionModel
-from cuanalytics.neuralnet import fit_nn, NeuralNetModel
+from cuanalytics.nn.neuralnet import fit_nn, NeuralNetModel
 from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
 from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
 from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel

@@ -252,7 +252,45 @@ def load_real_estate_data():
         print("\nFalling back to synthetic sales dataset...")
         print("If you need the real estate data, try downloading manually from:")
         print("https://archive.ics.uci.edu/dataset/477/real+estate+valuation+data+set")
-        return 
+
+        import numpy as np
+
+        # Deterministic, numeric fallback matching expected schema.
+        rng = np.random.default_rng(42)
+        n_rows = 414
+
+        transaction_date = rng.uniform(2012.667, 2013.583, size=n_rows)
+        house_age = rng.uniform(0.0, 45.0, size=n_rows)
+        distance_to_mrt = rng.uniform(20.0, 2000.0, size=n_rows)
+        num_convenience = rng.integers(0, 11, size=n_rows).astype(float)
+        latitude = rng.uniform(24.93, 25.15, size=n_rows)
+        longitude = rng.uniform(121.40, 121.65, size=n_rows)
+
+        # Synthetic target with reasonable signal and noise, always positive.
+        base = 80.0
+        noise = rng.normal(0.0, 5.0, size=n_rows)
+        price_per_unit = (
+            base
+            - 0.5 * house_age
+            - 0.01 * distance_to_mrt
+            + 1.5 * num_convenience
+            + noise
+        )
+        price_per_unit = np.clip(price_per_unit, 5.0, None)
+
+        df = pd.DataFrame(
+            {
+                "transaction_date": transaction_date,
+                "house_age": house_age,
+                "distance_to_MRT": distance_to_mrt,
+                "num_convenience_stores": num_convenience,
+                "latitude": latitude,
+                "longitude": longitude,
+                "price_per_unit": price_per_unit,
+            }
+        )
+
+        return df
     
     # Clean up column names
     df.columns = [

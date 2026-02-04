@@ -112,6 +112,13 @@ class TestLDAValidation:
         
         with pytest.raises(ValueError, match="must be numeric"):
             fit_lda(df, formula='class ~ I(categorical)')
+
+    def test_categorical_feature_with_C_allows_fit(self, multiclass_data):
+        """Test categorical features work when wrapped with C()"""
+        df = multiclass_data.copy()
+        df['categorical'] = ['cat1', 'cat2', 'cat3'] * 30
+        lda = fit_lda(df, formula='class ~ x1 + C(categorical)')
+        assert isinstance(lda, LDAModel)
     
     def test_unfitted_model_error(self):
         """Test error when using unfitted model"""
