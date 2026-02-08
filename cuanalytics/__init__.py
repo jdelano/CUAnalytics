@@ -3,7 +3,7 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
@@ -21,7 +21,7 @@ from cuanalytics.nn.neuralnet import fit_nn, NeuralNetModel
 from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
 from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
 from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel
-from cuanalytics.model_selection import cross_validate
+from cuanalytics.model_selection import cross_validate, plot_learning_curves
 
 # Define what gets imported with "from cuanalytics import *"
 __all__ = [
@@ -59,4 +59,5 @@ __all__ = [
     'fit_hierarchical',
     'HierarchicalClusteringModel',
     'cross_validate',
+    'plot_learning_curves',
 ]

@@ -43,7 +43,7 @@ class NeuralNetModel:
         activation='relu',
         solver='adam',
         alpha=0.0001,
-        max_iter=1000,
+        max_iter=10000,
         random_state=None,
     ):
         self.original_df = df
@@ -444,7 +444,7 @@ def fit_nn(
     activation='relu',
     solver='adam',
     alpha=0.0001,
-    max_iter=1000,
+    max_iter=10000,
     random_state=None,
 ):
     """

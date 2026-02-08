@@ -191,3 +191,213 @@ def cross_validate(
         results["oof_predictions"] = oof_predictions
 
     return results
+
+
+def plot_learning_curves(
+    fit_fns,
+    df,
+    formula,
+    train_sizes=None,
+    k=5,
+    shuffle=True,
+    random_state=None,
+    stratify_on="auto",
+    task="auto",
+    scoring=None,
+    metric=None,
+    verbose=False,
+    figsize=(10, 6),
+    title=None,
+    **model_kwargs,
+):
+    """
+    Plot learning curves (validation performance vs training size) for one or more models.
+
+    Parameters:
+    -----------
+    fit_fns : callable | list[callable]
+        Model fitting function(s) (e.g., fit_lm, fit_logit).
+    df : pd.DataFrame
+        DataFrame containing features and target.
+    formula : str
+        R-style formula (e.g., 'y ~ x1 + x2').
+    train_sizes : list[float|int] | None
+        Fractions (0-1] or absolute sizes of training data to use per fold.
+        If None, defaults to [0.1, 0.2, 0.4, 0.6, 0.8, 1.0].
+    k : int
+        Number of folds.
+    shuffle : bool
+        Whether to shuffle data before splitting.
+    random_state : int | None
+        Random seed for reproducibility (used if shuffle=True).
+    stratify_on : str | "auto" | None
+        Column to stratify on (classification only).
+        - "auto": uses target column for classification tasks
+        - None: no stratification
+    task : str
+        "auto", "classification", or "regression".
+    scoring : dict[str, callable] | None
+        Custom scoring functions. Each callable takes (y_true, y_pred).
+    metric : str | None
+        Metric name to plot (must be a key in scoring). Defaults to
+        "accuracy" for classification and "rmse" for regression.
+    verbose : bool
+        If False, suppresses model fit output during learning curve runs.
+    figsize : tuple
+        Matplotlib figure size.
+    title : str | None
+        Plot title.
+    **model_kwargs
+        Additional arguments passed to fit_fn.
+
+    Returns:
+    --------
+    results : dict
+        Dictionary with learning curve results and matplotlib Axes.
+    """
+    import matplotlib.pyplot as plt
+
+    if k < 2:
+        raise ValueError("k must be at least 2 for learning curves.")
+
+    target = _parse_target(formula)
+    if target not in df.columns:
+        raise ValueError(f"Target '{target}' not found in data.")
+
+    y = df[target]
+    resolved_task = task
+    if task == "auto":
+        resolved_task = _infer_task_type(y)
+    if resolved_task not in {"classification", "regression"}:
+        raise ValueError("task must be 'auto', 'classification', or 'regression'.")
+
+    if stratify_on == "auto":
+        stratify_on = target if resolved_task == "classification" else None
+    if stratify_on is not None and stratify_on not in df.columns:
+        raise KeyError(f"Stratification column '{stratify_on}' not found in DataFrame")
+
+    scoring_fns = scoring if scoring is not None else _default_scoring(resolved_task)
+    if not isinstance(scoring_fns, dict) or not scoring_fns:
+        raise ValueError("scoring must be a non-empty dict of name -> callable.")
+
+    if metric is None:
+        metric = "accuracy" if resolved_task == "classification" else "rmse"
+    if metric not in scoring_fns:
+        raise ValueError(f"metric '{metric}' not found in scoring functions.")
+
+    if train_sizes is None:
+        train_sizes = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+    if not isinstance(fit_fns, (list, tuple)):
+        fit_fns = [fit_fns]
+    if not fit_fns:
+        raise ValueError("fit_fns must include at least one model function.")
+    show_band = len(fit_fns) == 1
+
+    if resolved_task == "classification" and stratify_on is not None:
+        splitter = StratifiedKFold(
+            n_splits=k,
+            shuffle=shuffle,
+            random_state=random_state if shuffle else None,
+        )
+        split_iter = list(splitter.split(df, df[stratify_on]))
+    else:
+        splitter = KFold(
+            n_splits=k,
+            shuffle=shuffle,
+            random_state=random_state if shuffle else None,
+        )
+        split_iter = list(splitter.split(df))
+
+    rng = np.random.default_rng(random_state) if shuffle else None
+    base_train_len = len(split_iter[0][0]) if split_iter else 0
+    plot_x = []
+    for size in train_sizes:
+        if isinstance(size, float):
+            if size <= 0 or size > 1:
+                raise ValueError("train_sizes fractions must be in (0, 1].")
+            n_train = max(1, int(round(size * base_train_len)))
+        else:
+            n_train = int(size)
+            if n_train <= 0:
+                raise ValueError("train_sizes must be positive.")
+        n_train = min(n_train, base_train_len)
+        plot_x.append(n_train)
+
+    results = {
+        "task": resolved_task,
+        "train_sizes": train_sizes,
+        "train_sizes_abs": plot_x,
+        "metric": metric,
+        "models": {},
+    }
+
+    fig, ax = plt.subplots(figsize=figsize)
+    band_label = None
+
+    for fit_fn in fit_fns:
+        model_name = getattr(fit_fn, "__name__", "model")
+        val_means = []
+        val_stds = []
+
+        for size in train_sizes:
+            fold_scores = []
+            for train_idx, test_idx in split_iter:
+                train_idx = np.array(train_idx)
+                if shuffle and rng is not None:
+                    rng.shuffle(train_idx)
+
+                if isinstance(size, float):
+                    if size <= 0 or size > 1:
+                        raise ValueError("train_sizes fractions must be in (0, 1].")
+                    n_train = max(1, int(round(size * len(train_idx))))
+                else:
+                    n_train = int(size)
+                    if n_train <= 0:
+                        raise ValueError("train_sizes must be positive.")
+                n_train = min(n_train, len(train_idx))
+
+                subset_idx = train_idx[:n_train]
+                train_df = df.iloc[subset_idx]
+                test_df = df.iloc[test_idx]
+
+                if verbose:
+                    model = fit_fn(train_df, formula=formula, **model_kwargs)
+                else:
+                    import contextlib
+                    import io
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        model = fit_fn(train_df, formula=formula, **model_kwargs)
+
+                y_true = test_df[target]
+                y_pred = model.predict(test_df)
+                fold_scores.append(scoring_fns[metric](y_true, y_pred))
+
+            val_means.append(float(np.mean(fold_scores)))
+            val_stds.append(float(np.std(fold_scores, ddof=1)) if len(fold_scores) > 1 else 0.0)
+
+        results["models"][model_name] = {
+            "val_mean": val_means,
+            "val_std": val_stds,
+        }
+
+        ax.plot(plot_x, val_means, marker="o", label=model_name)
+        if show_band:
+            band_label = band_label or "±1 std (validation)"
+            ax.fill_between(
+                plot_x,
+                np.array(val_means) - np.array(val_stds),
+                np.array(val_means) + np.array(val_stds),
+                alpha=0.15,
+                label=band_label,
+            )
+            band_label = None
+
+    ax.set_xlabel("Training Set Size")
+    ax.set_ylabel(metric)
+    ax.set_title(title or f"Learning Curve ({metric})")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="lower right")
+
+    results["ax"] = ax
+    return results

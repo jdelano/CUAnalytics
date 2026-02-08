@@ -34,7 +34,7 @@ class LogisticRegressionModel:
         Maximum number of iterations
     """
 
-    def __init__(self, df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=1000):
+    def __init__(self, df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000):
         self.original_df = df
         self.formula = formula
         self.C = C
@@ -552,7 +552,7 @@ class LogisticRegressionModel:
         return ''
 
 
-def fit_logit(df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=1000):
+def fit_logit(df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000):
     """
     Fit a logistic regression model for classification.
 

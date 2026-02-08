@@ -222,7 +222,7 @@ nn = fit_nn(
     train,
     formula='diagnosis ~ .',
     hidden_layers=[3, 5, 2],
-    max_iter=1000
+    max_iter=10000
 )
 
 nn.summary()
@@ -389,16 +389,6 @@ test_scaled, _ = scale_data(test, exclude_cols=['class'], scaler=scaler)
 train_scaled, scaler = scale_data(train, exclude_cols=['class'], skip_binary=False)
 ```
 
-## 🎓 Educational Focus
-
-This package is designed for **learning**, not production use. Key features:
-
-- **Clear Output**: Statistical summaries match formats from R, SPSS, Stata
-- **Visualizations**: Built-in plotting for every algorithm
-- **Interpretability**: Methods to explain model decisions
-- **Consistency**: Uniform API across all models (`fit_*`, `predict`, `score`, `summary`, `visualize`)
-- **Ease of Use**: Simple, readable code that students can understand
-
 ## 🧪 Model Selection
 
 Cross-validation for supervised models:
@@ -429,6 +419,23 @@ print(cv_results['summary']['mean'])
 Notes:
 - `cross_validate` uses each model's `predict` output and computes metrics without printing.
 - You can call `model.get_score(df)` for metrics without printing, or `model.score(df)` to print a report.
+
+Learning curves (validation performance vs. training size):
+
+```python
+from cuanalytics import plot_learning_curves, fit_logit, fit_svm, fit_knn_classifier
+
+plot_learning_curves(
+    [fit_logit, fit_svm, fit_knn_classifier],
+    df,
+    formula='class ~ .',
+    train_sizes=[0.1, 0.3, 0.5, 0.7, 1.0],
+    k=5,
+    stratify_on='class',
+    metric='accuracy',
+    verbose=False,
+)
+```
 
 ## 🔄 Consistent API
 
@@ -481,12 +488,15 @@ This package is developed for educational purposes. Suggestions and improvements
 
 MIT License - Free for educational and commercial use.
 
-## 🎯 Course Alignment
+## 🎓 Educational Focus
 
-Modules are designed to support courses in:
-- Business Analytics and Visualization
-- Data Science fundamentals
-- Machine Learning introduction
+This package is designed for **learning**, not production use. Key features:
+
+- **Clear Output**: Statistical summaries match formats from R, SPSS, Stata
+- **Visualizations**: Built-in plotting for every algorithm
+- **Interpretability**: Methods to explain model decisions
+- **Consistency**: Uniform API across all models (`fit_*`, `predict`, `score`, `summary`, `visualize`)
+- **Ease of Use**: Simple, readable code that students can understand
 
 ## 👨‍🏫 Author
 
