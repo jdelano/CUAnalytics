@@ -136,6 +136,9 @@ class KNNRegressorModel:
         return pd.Series(preds, index=df.index, name=self.target)
 
     def score(self, df):
+        return self.get_score(df)
+
+    def get_score(self, df):
         self._check_fitted()
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]

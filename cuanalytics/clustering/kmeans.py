@@ -16,7 +16,7 @@ class KMeansModel:
     K-Means clustering model.
     """
 
-    def __init__(self, df, formula, n_clusters=3, random_state=42, n_init='auto'):
+    def __init__(self, df, formula, n_clusters=3, random_state=None, n_init='auto'):
         self.original_df = df
         self.formula = formula
         self.n_clusters = n_clusters
@@ -176,7 +176,7 @@ class KMeansModel:
         print("\n" + "=" * 70)
 
 
-def fit_kmeans(df, formula, n_clusters=3, random_state=42, n_init='auto'):
+def fit_kmeans(df, formula, n_clusters=3, random_state=None, n_init='auto'):
     if formula is None:
         raise ValueError("Must provide 'formula' for model specification")
     return KMeansModel(

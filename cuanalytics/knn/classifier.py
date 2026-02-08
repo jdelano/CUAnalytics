@@ -189,12 +189,16 @@ class KNNClassifierModel:
         return pd.Series(preds, index=df.index, name=self.target)
 
     def score(self, df):
+        report = self.get_score(df)
+        self._print_score_report(report)
+        return report
+
+    def get_score(self, df):
         self._check_fitted()
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]
         y_pred = self.model.predict(X)
         report = self._compute_classification_metrics(y_true, y_pred)
-        self._print_score_report(report)
         return report
 
     def get_metrics(self):

@@ -275,6 +275,15 @@ class NeuralNetModel:
         """
         Calculate metrics on a dataset (classification or regression).
         """
+        report = self.get_score(df)
+        if self.task_type == 'classification':
+            self._print_score_report(report)
+        return report
+
+    def get_score(self, df):
+        """
+        Calculate metrics on a dataset (no printing).
+        """
         self._check_fitted()
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]
@@ -282,7 +291,6 @@ class NeuralNetModel:
 
         if self.task_type == 'classification':
             report = self._compute_classification_metrics(y_true, y_pred)
-            self._print_score_report(report)
             return report
 
         return {

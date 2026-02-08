@@ -399,6 +399,37 @@ This package is designed for **learning**, not production use. Key features:
 - **Consistency**: Uniform API across all models (`fit_*`, `predict`, `score`, `summary`, `visualize`)
 - **Ease of Use**: Simple, readable code that students can understand
 
+## 🧪 Model Selection
+
+Cross-validation for supervised models:
+
+```python
+from cuanalytics import cross_validate, fit_logit, fit_lm
+
+# Classification
+cv_results = cross_validate(
+    fit_logit,
+    df,
+    formula='class ~ .',
+    k=5,
+    stratify_on='class',
+)
+print(cv_results['summary']['mean'])
+
+# Regression
+cv_results = cross_validate(
+    fit_lm,
+    df,
+    formula='price_per_unit ~ .',
+    k=5,
+)
+print(cv_results['summary']['mean'])
+```
+
+Notes:
+- `cross_validate` uses each model's `predict` output and computes metrics without printing.
+- You can call `model.get_score(df)` for metrics without printing, or `model.score(df)` to print a report.
+
 ## 🔄 Consistent API
 
 All models follow the same pattern:
@@ -416,6 +447,9 @@ predictions = model.predict(test_data)
 # Evaluate performance
 score_report = model.score(test_data)
 accuracy = score_report['accuracy']
+
+# Or get metrics without printing
+score_report = model.get_score(test_data)
 
 # View detailed summary
 model.summary()

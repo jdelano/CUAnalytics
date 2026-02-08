@@ -238,13 +238,20 @@ class LogisticRegressionModel:
         """
         Calculate and print classification metrics on a dataset.
         """
+        report = self.get_score(df)
+        self._print_score_report(report)
+        return report
+
+    def get_score(self, df):
+        """
+        Calculate classification metrics on a dataset (no printing).
+        """
         self._check_fitted()
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]
 
         y_pred = self.model.predict(X)
         report = self._compute_classification_metrics(y_true, y_pred)
-        self._print_score_report(report)
         return report
 
     def get_coefficients(self):

@@ -2,7 +2,7 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 # cuanalytics/preprocessing/split.py
 
-def split_data(df, test_size=0.2, val_size=None, random_state=42, stratify_on=None):
+def split_data(df, test_size=0.2, val_size=None, random_state=None, stratify_on=None):
     """
     Split data into training and test sets, optionally with validation set.
     
@@ -16,7 +16,7 @@ def split_data(df, test_size=0.2, val_size=None, random_state=42, stratify_on=No
         Proportion of data for validation set (0.0 to 1.0)
         If None, only returns train/test split
         If provided, returns train/test/val split
-    random_state : int
+    random_state : int | None
         Random seed for reproducibility
     stratify_on : str, optional
         Column name to use for stratified splitting

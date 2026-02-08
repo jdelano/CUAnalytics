@@ -17,7 +17,7 @@ class SimpleDecisionTree:
     Handles both numeric and categorical features automatically.
     """
     
-    def __init__(self, df, max_depth=None, criterion='entropy', formula=None):
+    def __init__(self, df, max_depth=None, criterion='entropy', formula=None, random_state=None):
         """
         Create and fit a decision tree classifier.
         
@@ -31,12 +31,15 @@ class SimpleDecisionTree:
             Split criterion: 'entropy' (information gain) or 'gini'
         formula : str
             Formula for specifying target and features
+        random_state : int | None
+            Random seed for reproducibility
         """
         self.df = df
         self.original_df = df
         self.max_depth = max_depth
         self.criterion = criterion
         self.formula = formula
+        self.random_state = random_state
         self.model_spec = None
 
         if formula is None:
@@ -97,7 +100,7 @@ class SimpleDecisionTree:
         self.tree = DecisionTreeClassifier(  # Changed from clf to tree
             criterion=self.criterion,
             max_depth=self.max_depth,
-            random_state=42
+            random_state=self.random_state
         )
         self.tree.fit(self.X_encoded, self.y_encoded)
     
@@ -236,13 +239,20 @@ class SimpleDecisionTree:
         metrics : dict
             Dictionary of accuracy, confusion matrix, and derived metrics
         """
+        report = self.get_score(df)
+        self._print_score_report(report)
+        return report
+
+    def get_score(self, df):
+        """
+        Calculate classification metrics on a dataset (no printing).
+        """
         self._check_fitted()
 
         y_true = df[self.target]
         y_pred = self.predict(df)
 
         report = self._compute_classification_metrics(y_true, y_pred)
-        self._print_score_report(report)
         return report
     
     def get_feature_importance(self):
@@ -651,7 +661,7 @@ class SimpleDecisionTree:
         print("\n" + "=" * 70)
 
 
-def fit_tree(df, max_depth=None, criterion='entropy', formula=None):
+def fit_tree(df, max_depth=None, criterion='entropy', formula=None, random_state=None):
     """
     Fit a decision tree for classification.
     
@@ -665,6 +675,8 @@ def fit_tree(df, max_depth=None, criterion='entropy', formula=None):
         Split criterion: 'entropy' (information gain) or 'gini'
     formula : str
         Formula for specifying target and features
+    random_state : int | None
+        Random seed for reproducibility
     
     Returns:
     --------
@@ -684,4 +696,10 @@ def fit_tree(df, max_depth=None, criterion='entropy', formula=None):
     """
     if formula is None:
         raise ValueError("Must provide 'formula' for model specification")
-    return SimpleDecisionTree(df, max_depth, criterion, formula=formula)
+    return SimpleDecisionTree(
+        df,
+        max_depth=max_depth,
+        criterion=criterion,
+        formula=formula,
+        random_state=random_state,
+    )

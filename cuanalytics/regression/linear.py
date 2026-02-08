@@ -120,6 +120,17 @@ class LinearRegressionModel:
         metrics : dict
             Dictionary with R², RMSE, and MAE
         """
+        return self.get_score(df)
+
+    def get_score(self, df):
+        """
+        Calculate regression metrics on a dataset (no printing).
+
+        Returns:
+        --------
+        metrics : dict
+            Dictionary with R², RMSE, and MAE
+        """
         self._check_fitted()
         
         X = self._transform_data_with_formula(df)
