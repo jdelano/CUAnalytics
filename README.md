@@ -23,16 +23,16 @@ pip install cuanalytics[dev]
 ## 🚀 Quick Start
 
 ```python
-from cuanalytics import load_sales_data, fit_lm, split_data
+import cuanalytics as ca
 
 # Load sample data
-df = load_sales_data()
+df = ca.load_real_estate_data()
 
 # Split into train/test
-train, test = split_data(df, test_size=0.2)
+train, test = ca.split_data(df, test_size=0.2)
 
 # Fit a linear regression model
-model = fit_lm(train, formula='monthly_sales ~ .')
+model = ca.fit_lm(train, formula='price_per_unit ~ .')
 
 # View comprehensive statistical output
 model.summary()
@@ -53,14 +53,14 @@ print(f"Test R²: {test_r2:.4f}")
 Build and visualize decision trees for classification tasks.
 
 ```python
-from cuanalytics import fit_tree, load_mushroom_data
+import cuanalytics as ca
 
 # Load data
-df = load_mushroom_data()
-train, test = split_data(df, test_size=0.2)
+df = ca.load_mushroom_data()
+train, test = ca.split_data(df, test_size=0.2)
 
 # Build decision tree
-tree = fit_tree(train, formula='class ~ .', max_depth=3, criterion='entropy')
+tree = ca.fit_tree(train, formula='class ~ .', max_depth=3, criterion='entropy')
 
 # Visualize tree structure
 tree.visualize()
@@ -84,14 +84,14 @@ test_acc = tree.score(test)['accuracy']
 Perform classification with dimensionality reduction.
 
 ```python
-from cuanalytics import fit_lda, load_iris_data
+import cuanalytics as ca
 
 # Load data
-df = load_iris_data()
-train, test = split_data(df, test_size=0.2)
+df = ca.load_iris_data()
+train, test = ca.split_data(df, test_size=0.2)
 
 # Fit LDA model
-lda = fit_lda(train, formula='species ~ .')
+lda = ca.fit_lda(train, formula='species ~ .')
 
 # Comprehensive summary
 lda.summary()
@@ -115,14 +115,14 @@ test_accuracy = lda.score(test)['accuracy']
 Linear SVM for binary classification with margin visualization.
 
 ```python
-from cuanalytics import fit_svm, load_breast_cancer_data
+import cuanalytics as ca
 
 # Load data
-df = load_breast_cancer_data()
-train, test = split_data(df, test_size=0.2)
+df = ca.load_breast_cancer_data()
+train, test = ca.split_data(df, test_size=0.2)
 
 # Fit SVM (C parameter controls margin strictness)
-svm = fit_svm(train, formula='diagnosis ~ .', C=1.0)
+svm = ca.fit_svm(train, formula='diagnosis ~ .', C=1.0)
 
 # View model details including support vectors
 svm.summary()
@@ -145,20 +145,20 @@ test_accuracy = svm.score(test)['accuracy']
 Comprehensive linear regression with formula support for interactions and transformations.
 
 ```python
-from cuanalytics import fit_lm, load_real_estate_data
+import cuanalytics as ca
 
 # Load data
-df = load_real_estate_data()
-train, test = split_data(df, test_size=0.2)
+df = ca.load_real_estate_data()
+train, test = ca.split_data(df, test_size=0.2)
 
 # Method 1: Use all features
-model = fit_lm(train, formula='price_per_unit ~ .')
+model = ca.fit_lm(train, formula='price_per_unit ~ .')
 
 # Method 2: Select specific features
-model = fit_lm(train, formula='price_per_unit ~ house_age + distance_to_MRT')
+model = ca.fit_lm(train, formula='price_per_unit ~ house_age + distance_to_MRT')
 
 # Method 3: Use R-style formulas for interactions
-model = fit_lm(train, 
+model = ca.fit_lm(train, 
                formula='price_per_unit ~ house_age * num_convenience_stores')
 
 # Statistical summary (like R/SPSS output)
@@ -183,14 +183,14 @@ predictions = model.predict(test)
 Logistic regression for binary and multiclass classification.
 
 ```python
-from cuanalytics import fit_logit, load_breast_cancer_data
+import cuanalytics as ca
 
 # Load data
-df = load_breast_cancer_data()
-train, test = split_data(df, test_size=0.2)
+df = ca.load_breast_cancer_data()
+train, test = ca.split_data(df, test_size=0.2)
 
 # Fit logistic regression
-logit = fit_logit(train, formula='diagnosis ~ .', C=1.0, penalty='l2', solver='lbfgs')
+logit = ca.fit_logit(train, formula='diagnosis ~ .', C=1.0, penalty='l2', solver='lbfgs')
 
 # Summary and visualization
 logit.summary()
@@ -211,14 +211,14 @@ Penalty and solver notes:
 Feedforward neural networks for classification or regression using scikit-learn MLP.
 
 ```python
-from cuanalytics import fit_nn, load_breast_cancer_data, scale_data
+import cuanalytics as ca
 
-df = load_breast_cancer_data()
-train, test = split_data(df, test_size=0.2, random_state=42)
-train, scaler = scale_data(train, exclude_cols=['diagnosis'])
-test, _ = scale_data(test, exclude_cols=['diagnosis'], scaler=scaler)
+df = ca.load_breast_cancer_data()
+train, test = ca.split_data(df, test_size=0.2, random_state=42)
+train, scaler = ca.scale_data(train, exclude_cols=['diagnosis'])
+test, _ = ca.scale_data(test, exclude_cols=['diagnosis'], scaler=scaler)
 
-nn = fit_nn(
+nn = ca.fit_nn(
     train,
     formula='diagnosis ~ .',
     hidden_layers=[3, 5, 2],
@@ -236,26 +236,26 @@ print(f"Accuracy: {report['accuracy']:.2%}")
 
 ```python
 # Main effects only
-fit_lm(df, formula='y ~ x1 + x2')
+ca.fit_lm(df, formula='y ~ x1 + x2')
 
 # Interaction effects (includes main effects + interaction)
-fit_lm(df, formula='y ~ x1 * x2')
+ca.fit_lm(df, formula='y ~ x1 * x2')
 # Equivalent to: y ~ x1 + x2 + x1:x2
 
 # Interaction only
-fit_lm(df, formula='y ~ x1:x2')
+ca.fit_lm(df, formula='y ~ x1:x2')
 
 # All features
-fit_lm(df, formula='y ~ .')
+ca.fit_lm(df, formula='y ~ .')
 
 # All except some
-fit_lm(df, formula='y ~ . - unwanted_feature')
+ca.fit_lm(df, formula='y ~ . - unwanted_feature')
 
 # Polynomial terms
-fit_lm(df, formula='y ~ x + I(x**2)')
+ca.fit_lm(df, formula='y ~ x + I(x**2)')
 
 # Transformations
-fit_lm(df, formula='y ~ np.log(x)')
+ca.fit_lm(df, formula='y ~ np.log(x)')
 ```
 
 ### 📉 Information Theory & Entropy
@@ -263,34 +263,33 @@ fit_lm(df, formula='y ~ np.log(x)')
 Calculate entropy and information gain for decision trees and data analysis.
 
 ```python
-from cuanalytics.entropy import calculate_entropy, information_gain
-from cuanalytics.entropy.visualization import plot_entropy_rectangles
+import cuanalytics as ca
 
 # Calculate entropy of a variable
-entropy = calculate_entropy(df['class'])
+entropy = ca.calculate_entropy(df['class'])
 print(f"Entropy: {entropy:.4f}")
 
 # Calculate entropy from a DataFrame column
-entropy = calculate_entropy(df, target_col='class')
+entropy = ca.calculate_entropy(df, target_col='class')
 print(f"Entropy: {entropy:.4f}")
 
 # Calculate information gain from a split
-ig = information_gain(df, feature='feature', target_col='class')
+ig = ca.information_gain(df, feature='feature', target_col='class')
 print(f"Information gain: {ig:.4f}")
 
 # Visualize entropy with rectangles
-plot_entropy_rectangles(df, feature='odor', target='class')
+ca.plot_entropy_rectangles(df, feature='odor', target='class')
 ```
 
 ### 📐 Similarity & Distance
 
 ```python
-from cuanalytics import euclidean, manhattan, cosine, jaccard
+import cuanalytics as ca
 
-euclidean([1, 2], [4, 6])
-manhattan([1, 2], [4, 6])
-cosine([1, 0], [0, 1])
-jaccard([1, 0, 1], [1, 1, 0])
+ca.euclidean([1, 2], [4, 6])
+ca.manhattan([1, 2], [4, 6])
+ca.cosine([1, 0], [0, 1])
+ca.jaccard([1, 0, 1], [1, 1, 0])
 ```
 
 ### 🤝 k-Nearest Neighbors (KNN)
@@ -298,12 +297,12 @@ jaccard([1, 0, 1], [1, 1, 0])
 Classification:
 
 ```python
-from cuanalytics import fit_knn_classifier, load_breast_cancer_data
+import cuanalytics as ca
 
-df = load_breast_cancer_data()
-train, test = split_data(df, test_size=0.2, random_state=42)
+df = ca.load_breast_cancer_data()
+train, test = ca.split_data(df, test_size=0.2, random_state=42)
 
-knn = fit_knn_classifier(train, formula='diagnosis ~ .', k=5)
+knn = ca.fit_knn_classifier(train, formula='diagnosis ~ .', k=5)
 knn.summary()
 
 report = knn.score(test)
@@ -313,12 +312,12 @@ print(f"Accuracy: {report['accuracy']:.2%}")
 Regression:
 
 ```python
-from cuanalytics import fit_knn_regressor, load_real_estate_data
+import cuanalytics as ca
 
-df = load_real_estate_data()
-train, test = split_data(df, test_size=0.2, random_state=42)
+df = ca.load_real_estate_data()
+train, test = ca.split_data(df, test_size=0.2, random_state=42)
 
-knn = fit_knn_regressor(train, formula='price_per_unit ~ .', k=5)
+knn = ca.fit_knn_regressor(train, formula='price_per_unit ~ .', k=5)
 metrics = knn.score(test)
 print(f"Test R²: {metrics['r2']:.4f}")
 ```
@@ -328,10 +327,10 @@ print(f"Test R²: {metrics['r2']:.4f}")
 K-Means:
 
 ```python
-from cuanalytics import fit_kmeans, load_iris_data
+import cuanalytics as ca
 
-df = load_iris_data()
-kmeans = fit_kmeans(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
+df = ca.load_iris_data()
+kmeans = ca.fit_kmeans(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
 kmeans.summary()
 kmeans.visualize()
 ```
@@ -339,10 +338,10 @@ kmeans.visualize()
 Hierarchical:
 
 ```python
-from cuanalytics import fit_hierarchical, load_iris_data
+import cuanalytics as ca
 
-df = load_iris_data()
-hier = fit_hierarchical(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
+df = ca.load_iris_data()
+hier = ca.fit_hierarchical(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
 hier.summary()
 hier.visualize()
 ```
@@ -352,16 +351,16 @@ hier.visualize()
 Built-in datasets for practice and examples.
 
 ```python
-from cuanalytics import (
-    load_iris_data,           # Classification (3 classes, 4 features)
-    load_mushroom_data,       # Classification (binary, categorical features)
-    load_breast_cancer_data,  # Classification (binary, 30 features)
-    load_sales_data,          # Regression (synthetic business data)
-    load_real_estate_data,    # Regression (real-world housing data)
+import cuanalytics as ca
+    ca.load_iris_data,           # Classification (3 classes, 4 features)
+    ca.load_mushroom_data,       # Classification (binary, categorical features)
+    ca.load_breast_cancer_data,  # Classification (binary, 30 features)
+    ca.load_sales_data,          # Regression (synthetic business data)
+    ca.load_real_estate_data,    # Regression (real-world housing data)
 )
 
 # All loaders return pandas DataFrames
-df = load_iris_data()
+df = ca.load_iris_data()
 print(df.head())
 print(df.shape)
 ```
@@ -369,24 +368,24 @@ print(df.shape)
 ### 🛠️ Utilities
 
 ```python
-from cuanalytics import split_data, scale_data
+import cuanalytics as ca
 
 # Train/test split with optional random seed
-train, test = split_data(df, test_size=0.2, random_state=42)
+train, test = ca.split_data(df, test_size=0.2, random_state=42)
 
 # Stratified split (useful for categorical targets)
-train, test = split_data(df, test_size=0.3, stratify_on='class')
+train, test = ca.split_data(df, test_size=0.3, stratify_on='class')
 
 # Train/validation/test split
-train, val, test = split_data(df, test_size=0.2, val_size=0.1, random_state=42)
+train, val, test = ca.split_data(df, test_size=0.2, val_size=0.1, random_state=42)
 
 # Scale numeric features (fit on train, apply to test)
 # By default, binary (0/1) columns are left unchanged.
-train_scaled, scaler = scale_data(train, exclude_cols=['class'])
-test_scaled, _ = scale_data(test, exclude_cols=['class'], scaler=scaler)
+train_scaled, scaler = ca.scale_data(train, exclude_cols=['class'])
+test_scaled, _ = ca.scale_data(test, exclude_cols=['class'], scaler=scaler)
 
 # Scale binary columns too (if desired)
-train_scaled, scaler = scale_data(train, exclude_cols=['class'], skip_binary=False)
+train_scaled, scaler = ca.scale_data(train, exclude_cols=['class'], skip_binary=False)
 ```
 
 ## 🧪 Model Selection
@@ -394,11 +393,11 @@ train_scaled, scaler = scale_data(train, exclude_cols=['class'], skip_binary=Fal
 Cross-validation for supervised models:
 
 ```python
-from cuanalytics import cross_validate, fit_logit, fit_lm
+import cuanalytics as ca
 
 # Classification
-cv_results = cross_validate(
-    fit_logit,
+cv_results = ca.cross_validate(
+    ca.fit_logit,
     df,
     formula='class ~ .',
     k=5,
@@ -407,8 +406,8 @@ cv_results = cross_validate(
 print(cv_results['summary']['mean'])
 
 # Regression
-cv_results = cross_validate(
-    fit_lm,
+cv_results = ca.cross_validate(
+    ca.fit_lm,
     df,
     formula='price_per_unit ~ .',
     k=5,
@@ -416,17 +415,45 @@ cv_results = cross_validate(
 print(cv_results['summary']['mean'])
 ```
 
+Grid search (example with logistic regression):
+
+```python
+import cuanalytics as ca
+
+df = ca.load_breast_cancer_data()
+train, test = ca.split_data(df, test_size=0.2, random_state=42)
+
+param_grid = {
+    "C": [0.1, 1.0, 10.0],
+}
+
+results = ca.grid_search_cv(
+    ca.fit_logit,
+    train,
+    formula='diagnosis ~ .',
+    param_grid=param_grid,
+    k=5,
+    stratify_on='diagnosis',
+    refit='accuracy',
+)
+
+best_model = results['best_model']
+test_report = best_model.score(test)
+print(f"Test Accuracy: {test_report['accuracy']:.2%}")
+```
+
 Notes:
-- `cross_validate` uses each model's `predict` output and computes metrics without printing.
+- `ca.cross_validate` uses each model's `predict` output and computes metrics without printing.
 - You can call `model.get_score(df)` for metrics without printing, or `model.score(df)` to print a report.
+ - Example notebook: `examples/14_grid_search_models.ipynb` (logistic regression, SVM, and neural net grids).
 
 Learning curves (validation performance vs. training size):
 
 ```python
-from cuanalytics import plot_learning_curves, fit_logit, fit_svm, fit_knn_classifier
+import cuanalytics as ca
 
-plot_learning_curves(
-    [fit_logit, fit_svm, fit_knn_classifier],
+ca.plot_learning_curves(
+    [ca.fit_logit, ca.fit_svm, ca.fit_knn_classifier],
     df,
     formula='class ~ .',
     train_sizes=[0.1, 0.3, 0.5, 0.7, 1.0],
@@ -472,12 +499,12 @@ For detailed documentation on each module:
 
 ```python
 # Get help on any function
-help(fit_lm)
-help(fit_tree)
+help(ca.fit_lm)
+help(ca.fit_tree)
 
 # View docstrings
-from cuanalytics import fit_lda
-print(fit_lda.__doc__)
+import cuanalytics as ca
+print(ca.fit_lda.__doc__)
 ```
 
 ## 🤝 Contributing

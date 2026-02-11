@@ -193,6 +193,195 @@ def cross_validate(
     return results
 
 
+def grid_search_cv(
+    fit_fn,
+    df,
+    formula,
+    param_grid,
+    k=5,
+    shuffle=True,
+    random_state=None,
+    stratify_on="auto",
+    task="auto",
+    scoring=None,
+    refit=None,
+    verbose=False,
+    **model_kwargs,
+):
+    """
+    Grid-search hyperparameters using cross-validation and refit the best model.
+
+    Parameters:
+    -----------
+    fit_fn : callable
+        Model fitting function (e.g., fit_lm, fit_logit).
+    df : pd.DataFrame
+        DataFrame containing features and target.
+    formula : str
+        R-style formula (e.g., 'y ~ x1 + x2').
+    param_grid : dict[str, list]
+        Dictionary of hyperparameter names to candidate values.
+    k : int
+        Number of folds.
+    shuffle : bool
+        Whether to shuffle data before splitting.
+    random_state : int | None
+        Random seed for reproducibility (used if shuffle=True).
+    stratify_on : str | "auto" | None
+        Column to stratify on (classification only).
+        - "auto": uses target column for classification tasks
+        - None: no stratification
+    task : str
+        "auto", "classification", or "regression".
+    scoring : dict[str, callable] | None
+        Custom scoring functions. Each callable takes (y_true, y_pred).
+    refit : str | None
+        Metric name to choose the best params. Defaults to
+        "accuracy" for classification and "rmse" for regression.
+    verbose : bool
+        If False, suppresses model fit output during CV runs.
+    **model_kwargs
+        Additional arguments passed to fit_fn.
+
+    Returns:
+    --------
+    results : dict
+        Dictionary with CV results and the refit best model.
+    """
+    import itertools
+
+    if k < 2:
+        raise ValueError("k must be at least 2 for cross-validation.")
+
+    if not isinstance(param_grid, dict) or not param_grid:
+        raise ValueError("param_grid must be a non-empty dict of name -> list of values.")
+    for name, values in param_grid.items():
+        if not isinstance(values, (list, tuple)) or len(values) == 0:
+            raise ValueError(f"param_grid values for '{name}' must be a non-empty list.")
+
+    target = _parse_target(formula)
+    if target not in df.columns:
+        raise ValueError(f"Target '{target}' not found in data.")
+
+    y = df[target]
+    resolved_task = task
+    if task == "auto":
+        resolved_task = _infer_task_type(y)
+    if resolved_task not in {"classification", "regression"}:
+        raise ValueError("task must be 'auto', 'classification', or 'regression'.")
+
+    if stratify_on == "auto":
+        stratify_on = target if resolved_task == "classification" else None
+    if stratify_on is not None and stratify_on not in df.columns:
+        raise KeyError(f"Stratification column '{stratify_on}' not found in DataFrame")
+
+    scoring_fns = scoring if scoring is not None else _default_scoring(resolved_task)
+    if not isinstance(scoring_fns, dict) or not scoring_fns:
+        raise ValueError("scoring must be a non-empty dict of name -> callable.")
+
+    if refit is None:
+        refit = "accuracy" if resolved_task == "classification" else "rmse"
+    if refit not in scoring_fns:
+        raise ValueError(f"refit '{refit}' not found in scoring functions.")
+
+    if resolved_task == "classification" and stratify_on is not None:
+        splitter = StratifiedKFold(
+            n_splits=k,
+            shuffle=shuffle,
+            random_state=random_state if shuffle else None,
+        )
+        split_iter = list(splitter.split(df, df[stratify_on]))
+    else:
+        splitter = KFold(
+            n_splits=k,
+            shuffle=shuffle,
+            random_state=random_state if shuffle else None,
+        )
+        split_iter = list(splitter.split(df))
+
+    param_names = list(param_grid.keys())
+    param_values = [param_grid[name] for name in param_names]
+    param_combinations = [
+        dict(zip(param_names, values)) for values in itertools.product(*param_values)
+    ]
+
+    cv_results = []
+    for params in param_combinations:
+        fold_metrics = []
+        for fold_idx, (train_idx, test_idx) in enumerate(split_iter, start=1):
+            train_df = df.iloc[train_idx]
+            test_df = df.iloc[test_idx]
+
+            if verbose:
+                model = fit_fn(train_df, formula=formula, **model_kwargs, **params)
+            else:
+                import contextlib
+                import io
+                with contextlib.redirect_stdout(io.StringIO()):
+                    model = fit_fn(train_df, formula=formula, **model_kwargs, **params)
+
+            y_true = test_df[target]
+            y_pred = model.predict(test_df)
+
+            fold_result = {"fold": fold_idx}
+            for name, fn in scoring_fns.items():
+                fold_result[name] = fn(y_true, y_pred)
+            fold_metrics.append(fold_result)
+
+        metrics_df = pd.DataFrame(fold_metrics).set_index("fold")
+        summary = {
+            "mean": metrics_df.mean().to_dict(),
+            "std": metrics_df.std(ddof=1).to_dict(),
+        }
+
+        cv_results.append(
+            {
+                "params": params,
+                "folds": fold_metrics,
+                "mean": summary["mean"],
+                "std": summary["std"],
+            }
+        )
+
+    lower_is_better = {"rmse", "mae", "mse"}
+    best_idx = None
+    best_score = None
+    for idx, result in enumerate(cv_results):
+        score = result["mean"][refit]
+        if best_idx is None:
+            best_idx = idx
+            best_score = score
+            continue
+        if refit in lower_is_better:
+            if score < best_score:
+                best_idx = idx
+                best_score = score
+        else:
+            if score > best_score:
+                best_idx = idx
+                best_score = score
+
+    best_params = cv_results[best_idx]["params"]
+    if verbose:
+        best_model = fit_fn(df, formula=formula, **model_kwargs, **best_params)
+    else:
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            best_model = fit_fn(df, formula=formula, **model_kwargs, **best_params)
+
+    return {
+        "task": resolved_task,
+        "k": k,
+        "stratify_on": stratify_on,
+        "refit": refit,
+        "best_params": best_params,
+        "best_score": best_score,
+        "best_model": best_model,
+        "cv_results": cv_results,
+    }
+
+
 def plot_learning_curves(
     fit_fns,
     df,

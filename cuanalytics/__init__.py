@@ -3,13 +3,13 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
 from cuanalytics.datasets.loaders import load_mushroom_data, load_iris_data, load_breast_cancer_data, load_real_estate_data
 from cuanalytics.entropy.metrics import calculate_entropy, information_gain
-from cuanalytics.entropy.visualization import plot_entropy
+from cuanalytics.entropy.visualization import plot_entropy, plot_entropy_rectangles
 from cuanalytics.preprocessing.split import split_data
 from cuanalytics.preprocessing.scale import scale_data
 from cuanalytics.trees.decision_tree import fit_tree, SimpleDecisionTree
@@ -21,7 +21,7 @@ from cuanalytics.nn.neuralnet import fit_nn, NeuralNetModel
 from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
 from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
 from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel
-from cuanalytics.model_selection import cross_validate, plot_learning_curves
+from cuanalytics.model_selection import cross_validate, grid_search_cv, plot_learning_curves
 
 # Define what gets imported with "from cuanalytics import *"
 __all__ = [
@@ -32,6 +32,7 @@ __all__ = [
     'calculate_entropy',
     'information_gain',
     'plot_entropy',
+    'plot_entropy_rectangles',
     'split_data',
     'scale_data',
     'fit_tree',
@@ -59,5 +60,6 @@ __all__ = [
     'fit_hierarchical',
     'HierarchicalClusteringModel',
     'cross_validate',
+    'grid_search_cv',
     'plot_learning_curves',
 ]

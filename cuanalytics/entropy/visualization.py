@@ -75,3 +75,10 @@ def plot_entropy(df, feature, target_col='class'):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_entropy_rectangles(df, feature, target='class'):
+    """
+    Backwards-compatible alias for plot_entropy with a clearer name.
+    """
+    return plot_entropy(df, feature, target_col=target)
