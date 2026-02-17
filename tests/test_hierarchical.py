@@ -36,6 +36,8 @@ def test_get_metrics(cluster_data):
     model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
     metrics = model.get_metrics()
     assert metrics['model_type'] == 'hierarchical'
+    assert all(isinstance(k, int) for k in metrics['cluster_counts'].keys())
+    assert all(isinstance(v, int) for v in metrics['cluster_counts'].values())
 
 
 def test_predict_new_data_error(cluster_data):
@@ -60,3 +62,51 @@ def test_unfitted_predict_raises(cluster_data):
     model = HierarchicalClusteringModel.__new__(HierarchicalClusteringModel)
     with pytest.raises(RuntimeError, match="not been fitted"):
         model.predict()
+
+
+def test_visualize_dendrogram_runs(cluster_data, monkeypatch):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize()
+
+
+def test_visualize_dendrogram_with_cutoff_runs(cluster_data, monkeypatch):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize(cutoff=5)
+
+
+def test_visualize_dendrogram_with_level_truncation_runs(cluster_data, monkeypatch):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize(cutoff=3, truncate_mode='level')
+
+
+def test_visualize_dendrogram_invalid_cutoff_raises(cluster_data):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    with pytest.raises(ValueError, match="cutoff must be >= 2 for truncate_mode='lastp'"):
+        model.visualize(cutoff=1)
+
+
+def test_visualize_dendrogram_level_cutoff_one_runs(cluster_data, monkeypatch):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize(cutoff=1, truncate_mode='level')
+
+
+def test_visualize_dendrogram_level_cutoff_zero_runs(cluster_data, monkeypatch):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize(cutoff=0, truncate_mode='level')
+
+
+def test_visualize_dendrogram_invalid_truncate_mode_raises(cluster_data):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    with pytest.raises(ValueError, match="truncate_mode must be one of"):
+        model.visualize(cutoff=3, truncate_mode='bad_mode')
+
+
+def test_visualize_all_features_runs(cluster_data, monkeypatch):
+    model = fit_hierarchical(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize_all_features()

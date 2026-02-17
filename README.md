@@ -343,7 +343,8 @@ import cuanalytics as ca
 df = ca.load_iris_data()
 hier = ca.fit_hierarchical(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
 hier.summary()
-hier.visualize()
+hier.visualize()  # Dendrogram
+hier.visualize_all_features()  # PCA projection of all features
 ```
 
 ### 📊 Dataset Loaders
