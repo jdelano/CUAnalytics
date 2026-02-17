@@ -333,6 +333,12 @@ df = ca.load_iris_data()
 kmeans = ca.fit_kmeans(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
 kmeans.summary()
 kmeans.visualize()
+metrics = kmeans.get_metrics()
+print(metrics['silhouette'])
+
+# Optional: one-vs-rest rule descriptions for each cluster
+cluster_descriptions = kmeans.describe_clusters(max_depth=3)
+cluster_descriptions[['cluster', 'cluster_rule']].drop_duplicates().sort_values('cluster')
 ```
 
 Hierarchical:
@@ -343,7 +349,9 @@ import cuanalytics as ca
 df = ca.load_iris_data()
 hier = ca.fit_hierarchical(df, formula='~ sepal_length + sepal_width + petal_length + petal_width', n_clusters=3)
 hier.summary()
-hier.visualize()  # Dendrogram
+hier.visualize()  # Full dendrogram
+hier.visualize(cutoff=10, truncate_mode='lastp')  # Last 10 groupings
+hier.visualize(cutoff=2, truncate_mode='level')  # Top 2 hierarchy levels
 hier.visualize_all_features()  # PCA projection of all features
 ```
 
@@ -353,12 +361,12 @@ Built-in datasets for practice and examples.
 
 ```python
 import cuanalytics as ca
-    ca.load_iris_data,           # Classification (3 classes, 4 features)
-    ca.load_mushroom_data,       # Classification (binary, categorical features)
-    ca.load_breast_cancer_data,  # Classification (binary, 30 features)
-    ca.load_sales_data,          # Regression (synthetic business data)
-    ca.load_real_estate_data,    # Regression (real-world housing data)
-)
+
+# Available dataset loaders
+ca.load_iris_data            # Classification (3 classes, 4 features)
+ca.load_mushroom_data        # Classification (binary, categorical features)
+ca.load_breast_cancer_data   # Classification (binary, 30 features)
+ca.load_real_estate_data     # Regression (real-world housing data)
 
 # All loaders return pandas DataFrames
 df = ca.load_iris_data()
@@ -446,7 +454,7 @@ print(f"Test Accuracy: {test_report['accuracy']:.2%}")
 Notes:
 - `ca.cross_validate` uses each model's `predict` output and computes metrics without printing.
 - You can call `model.get_score(df)` for metrics without printing, or `model.score(df)` to print a report.
- - Example notebook: `examples/14_grid_search_models.ipynb` (logistic regression, SVM, and neural net grids).
+- Example notebook: `examples/14_grid_search_models.ipynb` (logistic regression, SVM, and neural net grids).
 
 Learning curves (validation performance vs. training size):
 
@@ -465,9 +473,9 @@ ca.plot_learning_curves(
 )
 ```
 
-## 🔄 Consistent API
+## 🔄 API Pattern
 
-All models follow the same pattern:
+Most models follow this pattern:
 
 ```python
 # Fit model
@@ -481,17 +489,21 @@ predictions = model.predict(test_data)
 
 # Evaluate performance
 score_report = model.score(test_data)
-accuracy = score_report['accuracy']
-
-# Or get metrics without printing
-score_report = model.get_score(test_data)
+some_metric = list(score_report.values())[0]
 
 # View detailed summary
 model.summary()
 
-# Visualize
+# Visualize (availability varies by model)
 model.visualize()
-model.visualize_features('feature1', 'feature2')  # For most models
+```
+
+Common optional methods on many models:
+
+```python
+model.get_metrics()
+model.visualize_features('feature1', 'feature2')   # Some supervised models
+model.visualize_all_features()                     # Some regression/clustering models
 ```
 
 ## 📖 Documentation

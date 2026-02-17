@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 
@@ -133,11 +134,77 @@ class KMeansModel:
             'n_features': len(self.feature_names),
             'feature_names': self.feature_names,
             'inertia': float(self.model.inertia_),
-            'cluster_counts': dict(pd.Series(self.labels_).value_counts().sort_index()),
+            'cluster_counts': {
+                int(cluster): int(count)
+                for cluster, count in pd.Series(self.labels_).value_counts().sort_index().items()
+            },
         }
         if self.n_clusters > 1 and len(self.X) > self.n_clusters:
             metrics['silhouette'] = float(silhouette_score(self.X, self.labels_))
         return metrics
+
+    def _extract_condensed_positive_rule(self, tree, feature_names):
+        tree_ = tree.tree_
+
+        def recurse(node, path, candidates):
+            feature_idx = tree_.feature[node]
+            if feature_idx != -2:
+                threshold = tree_.threshold[node]
+                feature = feature_names[feature_idx]
+                left_path = path + [f"{feature} <= {threshold:.3f}"]
+                right_path = path + [f"{feature} > {threshold:.3f}"]
+                recurse(tree_.children_left[node], left_path, candidates)
+                recurse(tree_.children_right[node], right_path, candidates)
+                return
+
+            counts = tree_.value[node][0]
+            predicted = int(np.argmax(counts))
+            positive_support = int(counts[1]) if len(counts) > 1 else 0
+            if predicted == 1 and positive_support > 0:
+                candidates.append((positive_support, path))
+
+        candidates = []
+        recurse(0, [], candidates)
+        if not candidates:
+            return "No concise rule found at this tree depth."
+
+        best_path = max(candidates, key=lambda x: x[0])[1]
+        if not best_path:
+            return "All observations (root rule)."
+        return " AND ".join(best_path)
+
+    def describe_clusters(self, max_depth=3, criterion='entropy', random_state=42):
+        """
+        Return original training data with cluster labels and condensed rule descriptions.
+
+        For each cluster, this fits a one-vs-rest decision tree on the model features and
+        extracts a concise positive rule. Each row receives the rule for its assigned cluster.
+        """
+        self._check_fitted()
+
+        allowed_criteria = {'entropy', 'gini'}
+        if criterion not in allowed_criteria:
+            raise ValueError("criterion must be 'entropy' or 'gini'.")
+
+        unique_clusters = np.sort(np.unique(self.labels_))
+        cluster_rules = {}
+        X_values = self.X.values
+
+        for cluster in unique_clusters:
+            y_binary = (self.labels_ == cluster).astype(int)
+            tree = DecisionTreeClassifier(
+                max_depth=max_depth,
+                criterion=criterion,
+                random_state=random_state,
+            )
+            tree.fit(X_values, y_binary)
+            cluster_rules[int(cluster)] = self._extract_condensed_positive_rule(tree, self.feature_names)
+
+        labeled = self.original_df.copy()
+        labels_series = pd.Series(self.labels_, index=self.X.index, name='cluster').astype(int)
+        labeled['cluster'] = labels_series.reindex(labeled.index)
+        labeled['cluster_rule'] = labeled['cluster'].map(cluster_rules)
+        return labeled
 
     def visualize(self, figsize=(8, 6)):
         self._check_fitted()
@@ -150,8 +217,27 @@ class KMeansModel:
             X_plot = self.X.values
             xlabel, ylabel = self.feature_names
 
+        unique_labels = np.sort(np.unique(self.labels_))
+        base_colors = [
+            '#ff7f00', '#377eb8', '#4daf4a', '#984ea3', '#b8860b',
+            '#a65628', '#f781bf', '#999999', '#66c2a5', '#1b9e77',
+        ]
+        marker_cycle = ['o', 's', '^', 'D', 'P', 'X', 'v', '<', '>', '*']
+        colors = {label: base_colors[i % len(base_colors)] for i, label in enumerate(unique_labels)}
+        markers = {label: marker_cycle[i % len(marker_cycle)] for i, label in enumerate(unique_labels)}
+
         fig, ax = plt.subplots(figsize=figsize)
-        scatter = ax.scatter(X_plot[:, 0], X_plot[:, 1], c=self.labels_, cmap='tab10', alpha=0.7, edgecolors='black')
+        for label in unique_labels:
+            mask = self.labels_ == label
+            ax.scatter(
+                X_plot[mask, 0],
+                X_plot[mask, 1],
+                color=colors[label],
+                marker=markers[label],
+                alpha=0.9,
+                edgecolors='white',
+                linewidth=0.7,
+            )
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.set_title('K-Means Clusters')

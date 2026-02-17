@@ -36,6 +36,8 @@ def test_get_metrics(cluster_data):
     model = fit_kmeans(cluster_data, formula='~ x1 + x2', n_clusters=3)
     metrics = model.get_metrics()
     assert metrics['model_type'] == 'kmeans'
+    assert all(isinstance(k, int) for k in metrics['cluster_counts'].keys())
+    assert all(isinstance(v, int) for v in metrics['cluster_counts'].values())
 
 
 def test_missing_formula_raises(cluster_data):
@@ -54,3 +56,26 @@ def test_unfitted_predict_raises(cluster_data):
     model = KMeansModel.__new__(KMeansModel)
     with pytest.raises(RuntimeError, match="not been fitted"):
         model.predict(cluster_data)
+
+
+def test_visualize_runs(cluster_data, monkeypatch):
+    model = fit_kmeans(cluster_data, formula='~ x1 + x2', n_clusters=3)
+    monkeypatch.setattr("matplotlib.pyplot.show", lambda: None)
+    model.visualize()
+
+
+def test_describe_clusters_returns_labeled_dataframe(cluster_data):
+    model = fit_kmeans(cluster_data, formula='~ x1 + x2', n_clusters=3, random_state=42)
+    described = model.describe_clusters(max_depth=2)
+    assert isinstance(described, pd.DataFrame)
+    assert len(described) == len(cluster_data)
+    assert 'cluster' in described.columns
+    assert 'cluster_rule' in described.columns
+    assert described['cluster'].notna().all()
+    assert described['cluster_rule'].notna().all()
+
+
+def test_describe_clusters_invalid_criterion_raises(cluster_data):
+    model = fit_kmeans(cluster_data, formula='~ x1 + x2', n_clusters=3, random_state=42)
+    with pytest.raises(ValueError, match="criterion must be 'entropy' or 'gini'"):
+        model.describe_clusters(criterion='bad_criterion')
