@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix
+from cuanalytics.metrics import ConfusionMatrix
 from cuanalytics.formula import allow_categorical_from_formula
 
 
@@ -142,53 +142,18 @@ class LogisticRegressionModel:
 
     def _compute_classification_metrics(self, y_true, y_pred):
         """Compute confusion-matrix based metrics."""
-        cm = confusion_matrix(y_true, y_pred, labels=self.classes)
-        total = cm.sum()
-        accuracy = np.trace(cm) / total if total else 0.0
-        row_marginals = cm.sum(axis=1)
-        col_marginals = cm.sum(axis=0)
-        expected = (row_marginals * col_marginals).sum() / (total ** 2) if total else 0.0
-        kappa = (accuracy - expected) / (1 - expected) if (1 - expected) else 0.0
+        cm = ConfusionMatrix(y_true, y_pred, labels=self.classes)
+        return cm.get_metrics()
 
-        per_class = {}
-        for idx, label in enumerate(self.classes):
-            tp = cm[idx, idx]
-            fn = cm[idx, :].sum() - tp
-            fp = cm[:, idx].sum() - tp
-            tn = total - tp - fn - fp
-
-            precision = tp / (tp + fp) if (tp + fp) else 0.0
-            recall = tp / (tp + fn) if (tp + fn) else 0.0
-            specificity = tn / (tn + fp) if (tn + fp) else 0.0
-            f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
-
-            per_class[label] = {
-                'precision': precision,
-                'recall': recall,
-                'sensitivity': recall,
-                'specificity': specificity,
-                'f1': f1
-            }
-
-        return {
-            'accuracy': accuracy,
-            'kappa': kappa,
-            'confusion_matrix': cm,
-            'per_class': per_class,
-        }
-
-    def _print_score_report(self, report):
+    def _print_score_report(self, report, display='inverted'):
         """Print a summary of classification performance."""
         print("\nSCORE REPORT")
         print("=" * 60)
         print(f"Accuracy: {report['accuracy']:.2%}")
         print(f"Kappa: {report['kappa']:.4f}")
 
-        conf_df = pd.DataFrame(
-            report['confusion_matrix'],
-            index=[f"Actual {c}" for c in self.classes],
-            columns=[f"Pred {c}" for c in self.classes]
-        )
+        conf_obj = ConfusionMatrix.from_matrix(report['confusion_matrix'], labels=self.classes)
+        conf_df = conf_obj.to_dataframe(display=display)
         print("\nConfusion Matrix:")
         print(conf_df.to_string())
 
@@ -234,12 +199,12 @@ class LogisticRegressionModel:
         X = self._transform_data_with_formula(df)
         return self.model.predict_proba(X)
 
-    def score(self, df):
+    def score(self, df, display='inverted'):
         """
         Calculate and print classification metrics on a dataset.
         """
         report = self.get_score(df)
-        self._print_score_report(report)
+        self._print_score_report(report, display=display)
         return report
 
     def get_score(self, df):
@@ -253,6 +218,18 @@ class LogisticRegressionModel:
         y_pred = self.model.predict(X)
         report = self._compute_classification_metrics(y_true, y_pred)
         return report
+
+    def get_confusion_matrix(self, df=None):
+        """Return a ConfusionMatrix object for train or provided data."""
+        self._check_fitted()
+        if df is None:
+            y_true = self.y
+            y_pred = self.model.predict(self.X)
+        else:
+            X = self._transform_data_with_formula(df)
+            y_true = df[self.target]
+            y_pred = self.model.predict(X)
+        return ConfusionMatrix(y_true, y_pred, labels=self.classes)
 
     def get_coefficients(self):
         """
@@ -422,7 +399,7 @@ class LogisticRegressionModel:
         plt.tight_layout()
         plt.show()
 
-    def summary(self):
+    def summary(self, display='inverted'):
         """
         Print detailed summary of logistic regression model.
         """
@@ -448,11 +425,8 @@ class LogisticRegressionModel:
         print("-" * 70)
         print(f"Training Accuracy: {train_metrics['accuracy']:.2%}")
 
-        conf_df = pd.DataFrame(
-            train_metrics['confusion_matrix'],
-            index=[f"Actual {c}" for c in self.classes],
-            columns=[f"Pred {c}" for c in self.classes]
-        )
+        conf_obj = ConfusionMatrix.from_matrix(train_metrics['confusion_matrix'], labels=self.classes)
+        conf_df = conf_obj.to_dataframe(display=display)
         print("\nTraining Confusion Matrix:")
         print(conf_df.to_string())
 

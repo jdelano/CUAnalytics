@@ -3,7 +3,7 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.3.4"
+__version__ = "0.4.0"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
@@ -19,6 +19,7 @@ from cuanalytics.regression.linear import fit_lm, LinearRegressionModel
 from cuanalytics.regression.logistic import fit_logit, LogisticRegressionModel
 from cuanalytics.nn.neuralnet import fit_nn, NeuralNetModel
 from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
+from cuanalytics.metrics import ConfusionMatrix
 from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
 from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel
 from cuanalytics.model_selection import cross_validate, grid_search_cv, plot_learning_curves
@@ -51,6 +52,7 @@ __all__ = [
     'manhattan',
     'cosine',
     'jaccard',
+    'ConfusionMatrix',
     'fit_knn_classifier',
     'KNNClassifierModel',
     'fit_knn_regressor',
