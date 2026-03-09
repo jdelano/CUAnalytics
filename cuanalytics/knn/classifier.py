@@ -153,6 +153,14 @@ class KNNClassifierModel:
         preds = self.model.predict(X)
         return pd.Series(preds, index=df.index, name=self.target)
 
+    def predict_proba(self, df):
+        """
+        Predict class probabilities for new data.
+        """
+        self._check_fitted()
+        X = self._transform_data_with_formula(df)
+        return self.model.predict_proba(X)
+
     def score(self, df, display='inverted'):
         report = self.get_score(df)
         self._print_score_report(report, display=display)

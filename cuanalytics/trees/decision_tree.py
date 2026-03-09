@@ -189,6 +189,14 @@ class SimpleDecisionTree:
         predictions = self.target_encoder.inverse_transform(predictions_encoded)
 
         return pd.Series(predictions, index=df.index, name=self.target)
+
+    def predict_proba(self, df):
+        """
+        Predict class probabilities for new data.
+        """
+        self._check_fitted()
+        X_encoded = self._transform_data_with_formula(df)
+        return self.tree.predict_proba(X_encoded)
     
     def score(self, df, display='inverted'):
         """
