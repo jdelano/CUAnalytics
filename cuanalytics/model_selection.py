@@ -728,8 +728,8 @@ class CurveAnalysisResult:
         curve = str(curve).lower()
         if curve in self._curve_cache:
             return self._curve_cache[curve]
-        if curve not in {"roc", "lift", "profit"}:
-            raise ValueError("curve must be one of {'roc', 'lift', 'profit'}.")
+        if curve not in {"roc", "lift", "profit", "cumulative_response"}:
+            raise ValueError("curve must be one of {'roc', 'lift', 'profit', 'cumulative_response'}.")
 
         y_bin = (self.y_true.values == self.positive_class).astype(int)
         w = self.sample_weight
@@ -763,7 +763,7 @@ class CurveAnalysisResult:
                 }
                 continue
 
-            if curve == "lift":
+            if curve in {"lift", "cumulative_response"}:
                 order = np.argsort(-score, kind="mergesort")
                 y_sorted = y_bin[order]
                 w_sorted = w[order]
@@ -848,6 +848,9 @@ class CurveAnalysisResult:
 
     def get_profit(self):
         return self._calculate_curve("profit")
+
+    def get_cumulative_response(self):
+        return self._calculate_curve("cumulative_response")
 
     def summary_table(self):
         roc = self.get_roc()
@@ -1133,3 +1136,51 @@ def plot_profit(
     if show:
         plt.show()
     return {"ax": ax, "data": profit}
+
+
+def plot_cumulative_response(
+    models,
+    test_df=None,
+    positive_class=None,
+    sample_weight=None,
+    model_names=None,
+    show=True,
+    ax=None,
+    figsize=(8, 6),
+    title="Cumulative Response Curve",
+):
+    """
+    Plot cumulative response (capture rate) vs population percentage.
+    Returns the same underlying curve data used for lift.
+    """
+    import matplotlib.pyplot as plt
+
+    if isinstance(models, CurveAnalysisResult):
+        curve_result = models
+    else:
+        if test_df is None:
+            raise ValueError("test_df is required when passing models to plot_cumulative_response.")
+        curve_result = calculate_curve(
+            models=models,
+            test_df=test_df,
+            positive_class=positive_class,
+            sample_weight=sample_weight,
+            model_names=model_names,
+        )
+    if ax is None:
+        _fig, ax = plt.subplots(figsize=figsize)
+
+    cumulative = curve_result.get_cumulative_response()
+    for name in curve_result.model_names:
+        data = cumulative[name]["data"]
+        ax.plot(data["population_frac"] * 100, data["capture_rate"] * 100, label=name)
+
+    ax.plot([0, 100], [0, 100], linestyle="--", color="#6f665b", label="Random baseline")
+    ax.set_xlabel("Population Contacted (%)")
+    ax.set_ylabel("Cumulative Response / Capture (%)")
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="lower right")
+    if show:
+        plt.show()
+    return {"ax": ax, "data": cumulative}

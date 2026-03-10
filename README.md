@@ -473,6 +473,41 @@ ca.plot_learning_curves(
 )
 ```
 
+Curve analysis for binary classifiers (ROC, Lift, Profit, and Cumulative Response):
+
+```python
+import cuanalytics as ca
+
+df = ca.load_breast_cancer_data()
+train, test = ca.split_data(df, test_size=0.2, random_state=42)
+
+logit = ca.fit_logit(train, formula='diagnosis ~ .', max_iter=2000)
+tree = ca.fit_tree(train, formula='diagnosis ~ .', max_depth=4, criterion='entropy', random_state=42)
+knn = ca.fit_knn_classifier(train, formula='diagnosis ~ .', k=9)
+
+models = [logit, tree, knn]
+names = ['Logistic', 'Tree', 'KNN']
+
+roc_out = ca.plot_roc(models, test_df=test, positive_class='M', model_names=names, show_cutoffs=True)
+lift_out = ca.plot_lift(models, test_df=test, positive_class='M', model_names=names)
+
+profit_cfg = {
+    'tp_value': 120.0,
+    'fp_value': -15.0,
+    'tn_value': 0.0,
+    'fn_value': -180.0,
+    'fixed_value': 0.0,
+}
+profit_out = ca.plot_profit(models, test_df=test, positive_class='M', model_names=names, profit_config=profit_cfg)
+cum_out = ca.plot_cumulative_response(models, test_df=test, positive_class='M', model_names=names)
+```
+
+Curve-analysis notes:
+- `positive_class` must match the target labels in your dataset (e.g., breast cancer uses `'B'` and `'M'`).
+- Profit config uses `*_value` keys; gains are typically positive and costs negative.
+- Plot helpers call `plt.show()` by default; pass `show=False` for scripts/tests.
+- Example notebook: `examples/18_roc_lift_profit_curves.ipynb`.
+
 ## 🔄 API Pattern
 
 Most models follow this pattern:

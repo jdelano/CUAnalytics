@@ -3,7 +3,7 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
@@ -29,6 +29,7 @@ from cuanalytics.model_selection import (
     plot_roc,
     plot_lift,
     plot_profit,
+    plot_cumulative_response,
 )
 
 # Define what gets imported with "from cuanalytics import *"
@@ -74,4 +75,5 @@ __all__ = [
     'plot_roc',
     'plot_lift',
     'plot_profit',
+    'plot_cumulative_response',
 ]
