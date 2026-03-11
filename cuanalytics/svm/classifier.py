@@ -135,7 +135,7 @@ class SVMModel:
     def _fit(self):
         """Fit the SVM model."""
         # Use linear kernel with specified C parameter
-        self.svm = SVC(kernel='linear', C=self.C)
+        self.svm = SVC(kernel='linear', C=self.C, probability=True)
         self.svm.fit(self.X, self.y)
     
     def _print_fit_summary(self):
@@ -219,8 +219,29 @@ class SVMModel:
         X = self._transform_data_with_formula(df)
         predictions = self.svm.predict(X)
         return pd.Series(predictions, index=df.index, name=self.target)
+
+    def predict_proba(self, df):
+        """
+        Predict class probabilities for new data.
+        """
+        self._check_fitted()
+        X = self._transform_data_with_formula(df)
+        return self.svm.predict_proba(X)
     
-    def score(self, df, display='inverted'):
+    def _resolve_positive_class(self, positive_class=None):
+        classes = list(self.classes)
+        if positive_class is not None:
+            if positive_class not in classes:
+                raise ValueError(f"positive_class '{positive_class}' not found in classes {classes}.")
+            return positive_class
+        class_set = set(classes)
+        if class_set == {0, 1}:
+            return 1
+        if class_set == {"0", "1"}:
+            return "1"
+        return sorted(classes)[-1]
+
+    def score(self, df, display='inverted', threshold=0.5, positive_class=None):
         """
         Calculate and print classification metrics on a dataset.
         
@@ -234,11 +255,11 @@ class SVMModel:
         metrics : dict
             Dictionary of accuracy, confusion matrix, and derived metrics
         """
-        report = self.get_score(df)
+        report = self.get_score(df, threshold=threshold, positive_class=positive_class)
         self._print_score_report(report, display=display)
         return report
 
-    def get_score(self, df):
+    def get_score(self, df, threshold=0.5, positive_class=None):
         """
         Calculate classification metrics on a dataset (no printing).
         """
@@ -246,7 +267,15 @@ class SVMModel:
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]
 
-        y_pred = self.svm.predict(X)
+        if not 0.0 <= float(threshold) <= 1.0:
+            raise ValueError("threshold must be between 0 and 1.")
+
+        model_classes = list(self.svm.classes_)
+        pos_class = self._resolve_positive_class(positive_class=positive_class)
+        pos_idx = model_classes.index(pos_class)
+        neg_class = next(c for c in model_classes if c != pos_class)
+        proba = self.svm.predict_proba(X)[:, pos_idx]
+        y_pred = np.where(proba >= float(threshold), pos_class, neg_class)
         report = self._compute_classification_metrics(y_true, y_pred)
         return report
 

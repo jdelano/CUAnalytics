@@ -199,15 +199,30 @@ class LogisticRegressionModel:
         X = self._transform_data_with_formula(df)
         return self.model.predict_proba(X)
 
-    def score(self, df, display='inverted'):
+    def _resolve_positive_class(self, positive_class=None):
+        classes = list(self.classes)
+        if len(classes) != 2:
+            return None
+        if positive_class is not None:
+            if positive_class not in classes:
+                raise ValueError(f"positive_class '{positive_class}' not found in classes {classes}.")
+            return positive_class
+        class_set = set(classes)
+        if class_set == {0, 1}:
+            return 1
+        if class_set == {"0", "1"}:
+            return "1"
+        return sorted(classes)[-1]
+
+    def score(self, df, display='inverted', threshold=0.5, positive_class=None):
         """
         Calculate and print classification metrics on a dataset.
         """
-        report = self.get_score(df)
+        report = self.get_score(df, threshold=threshold, positive_class=positive_class)
         self._print_score_report(report, display=display)
         return report
 
-    def get_score(self, df):
+    def get_score(self, df, threshold=0.5, positive_class=None):
         """
         Calculate classification metrics on a dataset (no printing).
         """
@@ -215,7 +230,23 @@ class LogisticRegressionModel:
         X = self._transform_data_with_formula(df)
         y_true = df[self.target]
 
-        y_pred = self.model.predict(X)
+        if not 0.0 <= float(threshold) <= 1.0:
+            raise ValueError("threshold must be between 0 and 1.")
+
+        model_classes = list(self.model.classes_)
+        if len(model_classes) == 2:
+            pos_class = self._resolve_positive_class(positive_class=positive_class)
+            pos_idx = model_classes.index(pos_class)
+            neg_class = next(c for c in model_classes if c != pos_class)
+            proba = self.model.predict_proba(X)[:, pos_idx]
+            y_pred = np.where(proba >= float(threshold), pos_class, neg_class)
+        else:
+            if positive_class is not None:
+                raise ValueError(
+                    "positive_class and threshold-based scoring are only supported for binary classification."
+                )
+            y_pred = self.model.predict(X)
+
         report = self._compute_classification_metrics(y_true, y_pred)
         return report
 
