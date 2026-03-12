@@ -801,17 +801,32 @@ class CurveAnalysisResult:
                 }
                 continue
 
-            thresholds = np.linspace(0.0, 1.0, 201)
-            pred_pos = score[:, None] >= thresholds[None, :]
-            y_pos_w = w * y_bin
-            y_neg_w = w * (1 - y_bin)
+            order = np.argsort(-score, kind="mergesort")
+            y_sorted = y_bin[order]
+            w_sorted = w[order]
+            score_sorted = score[order]
 
-            tp = pred_pos.T.dot(y_pos_w)
-            fp = pred_pos.T.dot(y_neg_w)
-            total_pos_w = float(y_pos_w.sum())
-            total_neg_w = float(y_neg_w.sum())
-            fn = total_pos_w - tp
-            tn = total_neg_w - fp
+            total_w = float(np.sum(w_sorted))
+            total_pos_w = float(np.sum(w_sorted * y_sorted))
+            total_neg_w = float(np.sum(w_sorted * (1 - y_sorted)))
+
+            tp_cum = np.cumsum(w_sorted * y_sorted)
+            fp_cum = np.cumsum(w_sorted * (1 - y_sorted))
+            fn_cum = total_pos_w - tp_cum
+            tn_cum = total_neg_w - fp_cum
+            pop_frac = tp_cum.copy()
+            if total_w > 0:
+                pop_frac = np.cumsum(w_sorted) / total_w
+            else:
+                pop_frac = np.zeros_like(tp_cum)
+
+            # Baseline at threshold=1.0 means no one is targeted.
+            tp = np.concatenate(([0.0], tp_cum))
+            fp = np.concatenate(([0.0], fp_cum))
+            fn = np.concatenate(([total_pos_w], fn_cum))
+            tn = np.concatenate(([total_neg_w], tn_cum))
+            thresholds = np.concatenate(([1.0], score_sorted))
+            population_frac = np.concatenate(([0.0], pop_frac))
 
             conf = self.profit_config
             profit = (
@@ -824,6 +839,7 @@ class CurveAnalysisResult:
 
             model_df = pd.DataFrame({
                 "threshold": thresholds,
+                "population_frac": population_frac,
                 "tp": tp,
                 "fp": fp,
                 "tn": tn,
@@ -835,6 +851,7 @@ class CurveAnalysisResult:
                 "data": model_df,
                 "max_profit": float(profit[best_idx]),
                 "max_profit_threshold": float(thresholds[best_idx]),
+                "max_profit_population_frac": float(population_frac[best_idx]),
             }
 
         self._curve_cache[curve] = curve_result
@@ -1097,7 +1114,7 @@ def plot_profit(
     title="Profit Curve",
 ):
     """
-    Plot profit vs threshold comparison and return profit curve data.
+    Plot profit vs targeted test population (%) and return profit curve data.
     """
     import matplotlib.pyplot as plt
 
@@ -1120,15 +1137,18 @@ def plot_profit(
     profit = curve_result.get_profit()
     for name in curve_result.model_names:
         data = profit[name]["data"]
-        ax.plot(data["threshold"], data["profit"], label=name)
+        ax.plot(data["population_frac"] * 100, data["profit"], label=name)
+        max_x = profit[name].get("max_profit_population_frac")
+        if max_x is None:
+            max_x = float(data.loc[data["profit"].idxmax(), "population_frac"])
         ax.scatter(
-            [profit[name]["max_profit_threshold"]],
+            [max_x * 100],
             [profit[name]["max_profit"]],
             s=30,
             zorder=3,
         )
 
-    ax.set_xlabel("Threshold")
+    ax.set_xlabel("Test Instances Targeted (%)")
     ax.set_ylabel("Profit")
     ax.set_title(title)
     ax.grid(True, alpha=0.3)
