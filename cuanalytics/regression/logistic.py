@@ -32,15 +32,18 @@ class LogisticRegressionModel:
         - 'saga': supports 'l1', 'l2', and 'elasticnet' with large datasets
     max_iter : int
         Maximum number of iterations
+    random_state : int | None
+        Random seed used by stochastic solvers (e.g., liblinear, sag, saga).
     """
 
-    def __init__(self, df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000):
+    def __init__(self, df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000, random_state=None):
         self.original_df = df
         self.formula = formula
         self.C = C
         self.penalty = penalty
         self.solver = solver
         self.max_iter = max_iter
+        self.random_state = random_state
         self.model_spec = None
 
         if formula is None:
@@ -117,6 +120,7 @@ class LogisticRegressionModel:
             'C': self.C,
             'solver': self.solver,
             'max_iter': self.max_iter,
+            'random_state': self.random_state,
         }
         if self.penalty != 'l2':
             kwargs['penalty'] = self.penalty
@@ -557,7 +561,7 @@ class LogisticRegressionModel:
         return ''
 
 
-def fit_logit(df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000):
+def fit_logit(df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000, random_state=None):
     """
     Fit a logistic regression model for classification.
 
@@ -575,6 +579,8 @@ def fit_logit(df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000):
         Solver to use
     max_iter : int
         Maximum number of iterations
+    random_state : int | None
+        Random seed used by stochastic solvers (e.g., liblinear, sag, saga).
     """
     if formula is None:
         raise ValueError("Must provide 'formula' for model specification")
@@ -585,4 +591,5 @@ def fit_logit(df, formula, C=1.0, penalty='l2', solver='lbfgs', max_iter=10000):
         penalty=penalty,
         solver=solver,
         max_iter=max_iter,
+        random_state=random_state,
     )

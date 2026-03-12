@@ -112,6 +112,17 @@ def test_predict_proba(binary_data):
     assert probs.shape[1] == len(model.classes)
 
 
+def test_random_state_passthrough(binary_data):
+    model = fit_logit(
+        binary_data,
+        formula='class ~ x1 + x2',
+        solver='liblinear',
+        random_state=123,
+    )
+    assert model.random_state == 123
+    assert model.model.random_state == 123
+
+
 def test_transform_missing_model_spec_raises(binary_data):
     model = fit_logit(binary_data, formula='class ~ x1 + x2')
     model.model_spec = None
