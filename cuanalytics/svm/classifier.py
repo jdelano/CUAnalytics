@@ -49,6 +49,7 @@ class SVMModel:
             Formula for specifying target and features
         """
         self.df = df
+        self.original_df = df.copy()
         self.C = C
         self.formula = formula
         self.model_spec = None
@@ -283,13 +284,10 @@ class SVMModel:
         """Return a ConfusionMatrix object for train or provided data."""
         self._check_fitted()
         if df is None:
-            y_true = self.y
-            y_pred = self.svm.predict(self.X)
+            report = self.get_score(self.original_df)
         else:
-            X = self._transform_data_with_formula(df)
-            y_true = df[self.target]
-            y_pred = self.svm.predict(X)
-        return ConfusionMatrix(y_true, y_pred, labels=self.classes)
+            report = self.get_score(df)
+        return ConfusionMatrix.from_matrix(report['confusion_matrix'], labels=self.classes)
     
     def get_support_vectors(self):
         """

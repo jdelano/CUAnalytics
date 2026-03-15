@@ -1,6 +1,111 @@
 import pandas as pd
 import requests
 from io import StringIO
+import io
+import tarfile
+import zipfile
+
+def load_sms_spam_data():
+    """
+    Load the UCI SMS Spam Collection dataset.
+
+    This dataset contains SMS messages labeled as either ham (legitimate)
+    or spam (unsolicited commercial message).
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with 5572 samples and 2 columns: 'label' and 'text'
+
+    Examples:
+    ---------
+    >>> from cuanalytics.datasets import load_sms_spam_data
+    >>> df = load_sms_spam_data()
+    >>> print(df.shape)
+    (5572, 2)
+    >>> print(df['label'].value_counts())
+
+    References:
+    -----------
+    https://archive.ics.uci.edu/dataset/228/sms+spam+collection
+    """
+    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip"
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
+            with zip_file.open("SMSSpamCollection") as data_file:
+                df = pd.read_csv(
+                    data_file,
+                    sep="\t",
+                    names=["label", "text"],
+                    encoding="utf-8",
+                )
+    except Exception as e:
+        print(f"Error loading SMS spam data: {e}")
+        print("Please ensure you have an internet connection.")
+        raise
+
+    return df
+
+def load_movie_reviews_data():
+    """
+    Load the Cornell Movie Review Polarity dataset.
+
+    This dataset contains 2,000 movie reviews labeled as either
+    positive or negative sentiment.
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with 2000 samples and 2 columns: 'label' and 'text'
+
+    Examples:
+    ---------
+    >>> from cuanalytics.datasets import load_movie_reviews_data
+    >>> df = load_movie_reviews_data()
+    >>> print(df.shape)
+    (2000, 2)
+    >>> print(df['label'].value_counts())
+
+    References:
+    -----------
+    https://www.cs.cornell.edu/people/pabo/movie-review-data/
+    """
+    url = "https://www.cs.cornell.edu/people/pabo/movie-review-data/review_polarity.tar.gz"
+
+    try:
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
+
+        records = []
+        with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:gz") as archive:
+            member_names = archive.getnames()
+            label_dirs = {
+                "pos": "positive",
+                "neg": "negative",
+            }
+
+            for folder_name, label in label_dirs.items():
+                review_names = sorted(
+                    name for name in member_names
+                    if name.startswith(f"txt_sentoken/{folder_name}/") and name.endswith(".txt")
+                )
+                for review_name in review_names:
+                    review_file = archive.extractfile(review_name)
+                    if review_file is None:
+                        continue
+                    text = review_file.read().decode("latin-1").strip()
+                    records.append({"label": label, "text": text})
+
+        df = pd.DataFrame(records, columns=["label", "text"])
+    except Exception as e:
+        print(f"Error loading movie reviews data: {e}")
+        print("Please ensure you have an internet connection.")
+        raise
+
+    return df
 
 def load_mushroom_data():
     """
@@ -314,6 +419,8 @@ def load_real_estate_data():
 
 # Module-level convenience dictionary
 AVAILABLE_DATASETS = {
+    'movie_reviews': load_movie_reviews_data,
+    'sms_spam': load_sms_spam_data,
     'mushroom': load_mushroom_data,
     'breast_cancer': load_breast_cancer_data,
     'iris': load_iris_data,

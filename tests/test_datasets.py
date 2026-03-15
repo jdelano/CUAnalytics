@@ -5,6 +5,8 @@ Tests for dataset loader functions
 import pytest
 import pandas as pd
 from cuanalytics.datasets import (
+    load_movie_reviews_data,
+    load_sms_spam_data,
     load_mushroom_data,
     load_iris_data,
     load_breast_cancer_data,
@@ -12,6 +14,68 @@ from cuanalytics.datasets import (
     list_datasets,
     load_dataset
 )
+
+
+class TestLoadMovieReviewsData:
+    """Tests for load_movie_reviews_data function"""
+
+    def test_returns_dataframe(self):
+        """Test that function returns a DataFrame"""
+        df = load_movie_reviews_data()
+        assert isinstance(df, pd.DataFrame)
+
+    def test_correct_shape(self):
+        """Test that dataset has correct shape"""
+        df = load_movie_reviews_data()
+        assert df.shape == (2000, 2)
+
+    def test_has_expected_columns(self):
+        """Test that dataset has expected columns"""
+        df = load_movie_reviews_data()
+        assert list(df.columns) == ['label', 'text']
+
+    def test_label_values(self):
+        """Test that label column has positive and negative values"""
+        df = load_movie_reviews_data()
+        unique_labels = set(df['label'].unique())
+        assert unique_labels == {'positive', 'negative'}
+
+    def test_balanced_classes(self):
+        """Test that dataset is balanced across sentiment labels"""
+        df = load_movie_reviews_data()
+        counts = df['label'].value_counts()
+        assert counts['positive'] == 1000
+        assert counts['negative'] == 1000
+
+
+class TestLoadSmsSpamData:
+    """Tests for load_sms_spam_data function"""
+
+    def test_returns_dataframe(self):
+        """Test that function returns a DataFrame"""
+        df = load_sms_spam_data()
+        assert isinstance(df, pd.DataFrame)
+
+    def test_correct_shape(self):
+        """Test that dataset has correct shape"""
+        df = load_sms_spam_data()
+        assert df.shape == (5572, 2)
+
+    def test_has_expected_columns(self):
+        """Test that dataset has expected columns"""
+        df = load_sms_spam_data()
+        assert list(df.columns) == ['label', 'text']
+
+    def test_label_values(self):
+        """Test that label column has ham and spam values"""
+        df = load_sms_spam_data()
+        unique_labels = set(df['label'].unique())
+        assert unique_labels == {'ham', 'spam'}
+
+    def test_text_column_not_empty(self):
+        """Test that text column contains message content"""
+        df = load_sms_spam_data()
+        assert df['text'].str.len().gt(0).all()
 
 
 class TestLoadMushroomData:
@@ -236,7 +300,7 @@ class TestListDatasets:
         datasets = list_datasets()
         
         # Should contain at least these datasets
-        expected = ['mushroom', 'iris', 'breast_cancer', 'real_estate']
+        expected = ['movie_reviews', 'sms_spam', 'mushroom', 'iris', 'breast_cancer', 'real_estate']
         for dataset in expected:
             assert dataset in datasets
     
@@ -254,6 +318,18 @@ class TestLoadDataset:
         df = load_dataset('mushroom')
         assert isinstance(df, pd.DataFrame)
         assert 'class' in df.columns
+
+    def test_load_movie_reviews_by_name(self):
+        """Test loading movie reviews dataset by name"""
+        df = load_dataset('movie_reviews')
+        assert isinstance(df, pd.DataFrame)
+        assert 'label' in df.columns
+
+    def test_load_sms_spam_by_name(self):
+        """Test loading SMS spam dataset by name"""
+        df = load_dataset('sms_spam')
+        assert isinstance(df, pd.DataFrame)
+        assert 'label' in df.columns
     
     def test_load_iris_by_name(self):
         """Test loading iris dataset by name"""
@@ -298,6 +374,30 @@ class TestDatasetErrorHandling:
         
         with pytest.raises(Exception):
             load_mushroom_data()
+
+    def test_movie_reviews_network_error_handling(self, monkeypatch):
+        """Test that movie review loader handles network errors"""
+        import requests
+
+        def mock_get(*args, **kwargs):
+            raise requests.exceptions.ConnectionError("Network error")
+
+        monkeypatch.setattr(requests, 'get', mock_get)
+
+        with pytest.raises(Exception):
+            load_movie_reviews_data()
+
+    def test_sms_spam_network_error_handling(self, monkeypatch):
+        """Test that SMS spam loader handles network errors"""
+        import requests
+
+        def mock_get(*args, **kwargs):
+            raise requests.exceptions.ConnectionError("Network error")
+
+        monkeypatch.setattr(requests, 'get', mock_get)
+
+        with pytest.raises(Exception):
+            load_sms_spam_data()
     
     def test_iris_network_error_handling(self, monkeypatch):
         """Test that iris loader handles network errors"""
@@ -341,12 +441,14 @@ class TestDatasetIntegration:
     def test_datasets_have_consistent_structure(self):
         """Test that datasets return DataFrames with expected structure"""
         # Each dataset should return a DataFrame
+        movie_reviews = load_movie_reviews_data()
+        sms_spam = load_sms_spam_data()
         mushroom = load_mushroom_data()
         iris = load_iris_data()
         breast_cancer = load_breast_cancer_data()
         real_estate = load_real_estate_data()
-        
-        for df in [mushroom, iris, breast_cancer, real_estate]:
+
+        for df in [movie_reviews, sms_spam, mushroom, iris, breast_cancer, real_estate]:
             assert isinstance(df, pd.DataFrame)
             assert len(df) > 0
             assert len(df.columns) > 0

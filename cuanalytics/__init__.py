@@ -3,11 +3,18 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "0.5.4"
+__version__ = "1.0.0"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
-from cuanalytics.datasets.loaders import load_mushroom_data, load_iris_data, load_breast_cancer_data, load_real_estate_data
+from cuanalytics.datasets.loaders import (
+    load_movie_reviews_data,
+    load_sms_spam_data,
+    load_mushroom_data,
+    load_iris_data,
+    load_breast_cancer_data,
+    load_real_estate_data,
+)
 from cuanalytics.entropy.metrics import calculate_entropy, information_gain
 from cuanalytics.entropy.visualization import plot_entropy, plot_entropy_rectangles
 from cuanalytics.preprocessing.split import split_data
@@ -22,6 +29,7 @@ from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
 from cuanalytics.metrics import ConfusionMatrix
 from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
 from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel
+from cuanalytics.text import fit_text_vectorizer, TextVectorizer
 from cuanalytics.model_selection import (
     cross_validate,
     grid_search_cv,
@@ -34,6 +42,8 @@ from cuanalytics.model_selection import (
 
 # Define what gets imported with "from cuanalytics import *"
 __all__ = [
+    'load_movie_reviews_data',
+    'load_sms_spam_data',
     'load_mushroom_data',
     'load_iris_data',
     'load_breast_cancer_data',
@@ -69,6 +79,8 @@ __all__ = [
     'KMeansModel',
     'fit_hierarchical',
     'HierarchicalClusteringModel',
+    'fit_text_vectorizer',
+    'TextVectorizer',
     'cross_validate',
     'grid_search_cv',
     'plot_learning_curves',

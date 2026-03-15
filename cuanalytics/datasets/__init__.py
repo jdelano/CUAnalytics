@@ -3,6 +3,8 @@ Dataset loaders for ITM 4150 course examples.
 """
 
 from .loaders import (
+    load_movie_reviews_data,
+    load_sms_spam_data,
     load_mushroom_data,
     load_iris_data,
     load_breast_cancer_data,
@@ -13,6 +15,8 @@ from .loaders import (
 )
 
 __all__ = [
+    'load_movie_reviews_data',
+    'load_sms_spam_data',
     'load_mushroom_data',
     'load_iris_data',
     'load_breast_cancer_data',
