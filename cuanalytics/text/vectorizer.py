@@ -123,6 +123,10 @@ class TextVectorizer:
         tokens = re.findall(r"\b\w+\b", doc)
         if not self.keep_numbers:
             tokens = [token for token in tokens if not any(ch.isdigit() for ch in token)]
+        tokens = [
+            token for token in tokens
+            if len(token) > 1 or any(ch.isdigit() for ch in token)
+        ]
         if self.remove_stopwords:
             tokens = [token for token in tokens if token not in ENGLISH_STOP_WORDS]
         if self.stem:

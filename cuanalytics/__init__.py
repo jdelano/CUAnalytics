@@ -3,7 +3,7 @@ ITM 4150: Advanced Business Analytics and Visualization
 Python toolkit for course materials at Cedarville University.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "Dr. John D. Delano"
 
 # Import commonly used functions for convenient access
@@ -29,7 +29,12 @@ from cuanalytics.similarity import euclidean, manhattan, cosine, jaccard
 from cuanalytics.metrics import ConfusionMatrix
 from cuanalytics.knn import fit_knn_classifier, KNNClassifierModel, fit_knn_regressor, KNNRegressorModel
 from cuanalytics.clustering import fit_kmeans, KMeansModel, fit_hierarchical, HierarchicalClusteringModel
-from cuanalytics.text import fit_text_vectorizer, TextVectorizer
+from cuanalytics.text import (
+    fit_text_vectorizer,
+    TextVectorizer,
+    fit_topic_lda,
+    LatentDirichletAllocationModel,
+)
 from cuanalytics.model_selection import (
     cross_validate,
     grid_search_cv,
@@ -81,6 +86,8 @@ __all__ = [
     'HierarchicalClusteringModel',
     'fit_text_vectorizer',
     'TextVectorizer',
+    'fit_topic_lda',
+    'LatentDirichletAllocationModel',
     'cross_validate',
     'grid_search_cv',
     'plot_learning_curves',

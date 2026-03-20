@@ -174,3 +174,26 @@ def test_top_terms_frequency_on_subset_uses_counts():
     assert terms.iloc[0]["score"] == 3
     assert terms.iloc[1]["term"] == "beta"
     assert terms.iloc[1]["score"] == 1
+
+
+def test_tokenizer_drops_single_character_contraction_fragments():
+    df = pd.DataFrame(
+        {
+            "review": [
+                "It's a film that doesn't know what it's doing.",
+                "That's not a movie it's worth revisiting.",
+            ]
+        }
+    )
+    vec = fit_text_vectorizer(
+        df,
+        text_col="review",
+        method="count",
+        remove_stopwords=False,
+        stem=False,
+    )
+
+    feature_names = set(vec.get_feature_names())
+
+    assert "s" not in feature_names
+    assert "t" not in feature_names
